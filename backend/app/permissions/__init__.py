@@ -1,0 +1,51 @@
+"""
+Permissions package initialization.
+"""
+from app.permissions.roles import Role, Permission, ROLE_PERMISSIONS, get_permissions_for_role, role_has_permission, user_has_permission
+from app.permissions.dependencies import (
+    get_current_user,
+    get_current_user_optional,
+    get_user_roles,
+    require_permission,
+    require_role,
+    require_admin,
+    require_parent,
+    require_student,
+    require_authenticated,
+    require_curriculum_read,
+    require_curriculum_write,
+    require_curriculum_publish,
+    require_progress_read_own,
+    require_progress_read_child,
+    require_progress_read_all,
+    require_admin_dashboard,
+    require_admin_users,
+    require_admin_audit,
+)
+
+__all__ = [
+    "Role",
+    "Permission",
+    "ROLE_PERMISSIONS",
+    "get_permissions_for_role",
+    "role_has_permission",
+    "user_has_permission",
+    "get_current_user",
+    "get_current_user_optional",
+    "get_user_roles",
+    "require_permission",
+    "require_role",
+    "require_admin",
+    "require_parent",
+    "require_student",
+    "require_authenticated",
+    "require_curriculum_read",
+    "require_curriculum_write",
+    "require_curriculum_publish",
+    "require_progress_read_own",
+    "require_progress_read_child",
+    "require_progress_read_all",
+    "require_admin_dashboard",
+    "require_admin_users",
+    "require_admin_audit",
+]

@@ -1,0 +1,94 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Database
+*.sqlite
+*.db
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.coverage.*
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Frontend
+node_modules/
+dist/
+build/
+.env
+.env.local
+
+# Coverage
+coverage/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Docker
+docker-compose.override.yml
+
+# Uploads
+uploads/
+media/
+
+# Backup
+backups/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Alembic
+backend/migrations/versions/*.pyc
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+# Python virtual environments
+.venv*/
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+
+# Node
+node_modules/
+
+# Mac
+.DS_Store
