@@ -61,6 +61,7 @@ class StudentProfile(Base, IDMixin, TimestampMixin, SoftDeleteMixin):
 
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    username: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
     date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     gender: Mapped[Optional[GenderEnum]] = mapped_column(SQLEnum(GenderEnum, values_callable=lambda x: [e.value for e in x]), nullable=True)
     avatar_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)

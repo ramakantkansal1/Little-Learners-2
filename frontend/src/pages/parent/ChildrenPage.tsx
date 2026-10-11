@@ -1,13 +1,23 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, User, Edit, Trash2, Loader2, Trophy } from 'lucide-react';
+import { Plus, User, Edit, Trash2, Loader2, Trophy, Copy, Check } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { parentApi, type Child, type ChildCreateRequest, type ChildUpdateRequest } from '@services';
 import { useAuth } from '@hooks/useAuth';
 
-const childSchema = z.object({
+// Schema for creating a new child - PIN is required
+const childCreateSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100),
+  age: z.coerce.number().min(2, 'Minimum age is 2').max(6, 'Maximum age is 6'),
+  stage: z.string().min(1, 'Please select a stage'),
+  avatar: z.string().min(1, 'Please select an avatar'),
+  pin: z.string().regex(/^\d{4,6}$/, 'PIN must be 4-6 digits'),
+});
+
+// Schema for editing an existing child - PIN is optional (leave blank to keep current)
+const childUpdateSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   age: z.coerce.number().min(2, 'Minimum age is 2').max(6, 'Maximum age is 6'),
   stage: z.string().min(1, 'Please select a stage'),
@@ -15,7 +25,23 @@ const childSchema = z.object({
   pin: z.string().regex(/^\d{4,6}$/, 'PIN must be 4-6 digits').optional().or(z.literal('')),
 });
 
-type ChildForm = z.infer<typeof childSchema>;
+type ChildForm = z.infer<typeof childCreateSchema>;
+
+function formatLastActive(dateStr: string | null): string {
+  if (!dateStr) return 'Never';
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  return date.toLocaleDateString();
+}
 
 const stages = [
   { id: 1, code: 'playgroup', name: 'Playgroup / Pre-Nursery (2-3)' },
@@ -40,7 +66,27 @@ export default function ChildrenPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copiedUsername, setCopiedUsername] = useState<number | null>(null);
   const { isLoading: authLoading } = useAuth();
+
+  const handleCopyUsername = async (username: string, childId: number) => {
+    try {
+      await navigator.clipboard.writeText(username);
+      setCopiedUsername(childId);
+      setTimeout(() => setCopiedUsername(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy username:', err);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = username;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopiedUsername(childId);
+      setTimeout(() => setCopiedUsername(null), 2000);
+    }
+  };
 
   const {
     register,
@@ -48,7 +94,7 @@ export default function ChildrenPage() {
     reset,
     formState: { errors },
   } = useForm<ChildForm>({
-    resolver: zodResolver(childSchema),
+    resolver: zodResolver(editingChild ? childUpdateSchema : childCreateSchema),
     defaultValues: { pin: '' },
   });
 
@@ -245,25 +291,49 @@ export default function ChildrenPage() {
                     <h3 className="text-lg font-display font-bold text-gray-900">{child.display_name}</h3>
                     <span className="badge badge-primary">{child.current_stage_name || child.current_stage_code || 'Unknown'}</span>
                   </div>
+                  
+                  {/* Username display with copy button */}
+                  <div className="mb-3 p-3 bg-gray-50 rounded-xl">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Student Username</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 font-mono text-sm bg-white px-3 py-2 rounded-lg border border-gray-200 text-gray-900 break-all">
+                        {child.username}
+                      </code>
+                      <button
+                        onClick={() => handleCopyUsername(child.username, child.id)}
+                        className="btn btn-ghost p-2 hover:bg-primary-50 hover:text-primary-600 transition-colors"
+                        aria-label={`Copy ${child.username} to clipboard`}
+                      >
+                        {copiedUsername === child.id ? (
+                          <Check className="w-5 h-5 text-green-500" />
+                        ) : (
+                          <Copy className="w-5 h-5 text-gray-400" />
+                        )}
+                      </button>
+                    </div>
+                    {copiedUsername === child.id && (
+                      <p className="mt-1.5 text-xs text-green-600 flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" />
+                        Copied to clipboard!
+                      </p>
+                    )}
+                  </div>
+
                   <p className="text-sm text-gray-500">
                     {child.date_of_birth 
                       ? `Age ${new Date().getFullYear() - new Date(child.date_of_birth).getFullYear()}`
-                      : 'Age unknown'}
+                      : 'Age unknown'} 
+                    • Last active: {formatLastActive(child.last_activity_at)}
                   </p>
                 </div>
               </div>
-
-              <div className="space-y-3 mb-4 p-4 bg-gray-50 rounded-xl">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Overall Progress</span>
-                  <span className="font-semibold text-gray-900">{child.progress_percentage}%</span>
-                </div>
-                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-pastel-blue to-pastel-green rounded-full"
-                    style={{ width: `${child.progress_percentage}%` }}
-                  />
-                </div>
+              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-pastel-blue to-pastel-green rounded-full"
+                  style={{ width: `${child.progress_percentage}%` }}
+                />
               </div>
 
               <div className="flex gap-2">
@@ -394,7 +464,17 @@ export default function ChildrenPage() {
 
               <div>
                 <label htmlFor="pin" className="label">
-                  PIN (Optional) <span className="text-sm text-gray-400">(4-6 digits for child login)</span>
+                  {editingChild ? (
+                    <>
+                      New Student PIN (Optional)
+                      <span className="text-sm text-gray-400 ml-2">(4-6 digits for child login)</span>
+                    </>
+                  ) : (
+                    <>
+                      Student PIN (Required)
+                      <span className="text-sm text-gray-400 ml-2">(4-6 digits for child login)</span>
+                    </>
+                  )}
                 </label>
                 <input
                   {...register('pin')}
@@ -405,11 +485,16 @@ export default function ChildrenPage() {
                   autoComplete="off"
                   disabled={saving}
                   inputMode="numeric"
+                  required={!editingChild}
                 />
                 {errors.pin && (
                   <p className="mt-1.5 text-sm text-red-500">{errors.pin.message}</p>
                 )}
-                <p className="mt-1 text-sm text-gray-500">Leave blank to keep current PIN</p>
+                <p className="mt-1 text-sm text-gray-500">
+                  {editingChild 
+                    ? 'Leave blank to keep the current PIN unchanged' 
+                    : 'This PIN is required for the student to log in'}
+                </p>
               </div>
 
               {error && (

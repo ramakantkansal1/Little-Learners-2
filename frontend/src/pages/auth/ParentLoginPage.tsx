@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '@hooks/useAuth';
+import { api } from '@services/api';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -32,24 +33,25 @@ export default function ParentLoginPage() {
   const onSubmit = async (data: LoginForm) => {
     setError('');
     try {
-      const response = await fetch('/api/v1/auth/parent/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(data),
-      });
+      const response = await api.post('/auth/parent/login', data);
 
-      const result = await response.json();
+      const result = response.data;
 
-      if (!response.ok) {
-        throw new Error(result.error?.message || 'Login failed');
+      if (result.access_token) {
+        setAuth(result.user, result.access_token, result.refresh_token);
+        navigate('/parent/dashboard', { replace: true });
+      } else {
+        navigate('/auth/parent/login', { replace: true });
       }
-
-      // Backend returns TokenResponse directly (not wrapped in ApiResponse)
-      setAuth(result.user, result.access_token, result.refresh_token);
-      navigate('/parent/dashboard', { replace: true });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else if (err && typeof err === 'object' && 'response' in err) {
+        const axiosError = err as { response?: { data?: { error?: { message?: string } } } };
+        setError(axiosError.response?.data?.error?.message || 'Login failed');
+      } else {
+        setError('Login failed. Please try again.');
+      }
     }
   };
 

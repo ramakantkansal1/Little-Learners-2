@@ -78,13 +78,35 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.requests: dict[str, list[float]] = {}
 
+    def _get_client_key(self, request: Request) -> str:
+        """Get rate limit key from X-Client-ID header, falling back to client IP."""
+        client_id = request.headers.get("X-Client-ID")
+        if client_id:
+            return f"client:{client_id}"
+        client_ip = request.client.host if request.client else "unknown"
+        return f"ip:{client_ip}"
+
+    def _get_cors_headers(self, request: Request) -> dict:
+        """Get CORS headers for error responses based on request origin."""
+        origin = request.headers.get("origin")
+        allowed_origins = settings.CORS_ORIGINS
+        
+        if origin and origin in allowed_origins:
+            return {
+                "Access-Control-Allow-Origin": origin,
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            }
+        return {}
+
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Skip rate limiting for health checks and CSRF token endpoint
         if request.url.path.startswith("/api/v1/health") or request.url.path == "/api/v1/auth/csrf-token":
             return await call_next(request)
 
-        # Get client IP
-        client_ip = request.client.host if request.client else "unknown"
+        # Get client key (X-Client-ID header or IP)
+        client_key = self._get_client_key(request)
         current_time = time.time()
 
         # Determine rate limit based on path
@@ -96,23 +118,24 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             window_seconds = settings.RATE_LIMIT_API_WINDOW_MINUTES * 60
 
         # Clean old requests
-        if client_ip in self.requests:
-            self.requests[client_ip] = [
-                req_time for req_time in self.requests[client_ip]
+        if client_key in self.requests:
+            self.requests[client_key] = [
+                req_time for req_time in self.requests[client_key]
                 if current_time - req_time < window_seconds
             ]
         else:
-            self.requests[client_ip] = []
+            self.requests[client_key] = []
 
         # Check rate limit
-        if len(self.requests[client_ip]) >= max_requests:
+        if len(self.requests[client_key]) >= max_requests:
             logger.warning(
                 "Rate limit exceeded",
-                client_ip=client_ip,
+                client_key=client_key,
                 path=request.url.path,
                 limit=max_requests,
                 window=window_seconds,
             )
+            cors_headers = self._get_cors_headers(request)
             return JSONResponse(
                 status_code=429,
                 content={
@@ -122,11 +145,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                         "details": [],
                     }
                 },
-                headers={"Retry-After": str(window_seconds)},
+                headers={
+                    "Retry-After": str(window_seconds),
+                    **cors_headers,
+                },
             )
 
         # Record request
-        self.requests[client_ip].append(current_time)
+        self.requests[client_key].append(current_time)
 
         return await call_next(request)
 

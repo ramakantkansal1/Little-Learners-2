@@ -27,7 +27,7 @@ class ChildCreateRequest(BaseModel):
     avatar_type: Optional[str] = Field(None, max_length=50)
     current_stage_id: Optional[int] = None
     preferred_language: str = Field("en", max_length=10)
-    pin: Optional[str] = Field(None, min_length=4, max_length=6, pattern=r"^\d+$")
+    pin: str = Field(..., min_length=4, max_length=6, pattern=r"^\d+$")
 
 
 class ChildUpdateRequest(BaseModel):
@@ -57,6 +57,7 @@ class ChildResponse(BaseModel):
     is_active: bool
     progress_percentage: int
     last_activity_at: Optional[str]
+    username: str
 
     class Config:
         from_attributes = True
@@ -186,6 +187,7 @@ async def get_my_profile(
                 is_active=rel.student.is_active,
                 progress_percentage=progress,
                 last_activity_at=rel.student.last_activity_at.isoformat() if rel.student.last_activity_at else None,
+                username=rel.student.username,
             ))
     
     return ParentProfileResponse(
@@ -228,6 +230,7 @@ async def list_my_children(
                 is_active=rel.student.is_active,
                 progress_percentage=progress,
                 last_activity_at=rel.student.last_activity_at.isoformat() if rel.student.last_activity_at else None,
+                username=rel.student.username,
             ))
     
     return children_response
@@ -265,9 +268,9 @@ async def create_child(
         except ValueError:
             raise ValidationException("Invalid date format. Use YYYY-MM-DD")
     
-    # Create student user
+    # Create student user first (we need the user_id for the student)
     student_user = User(
-        email=f"student_{request.display_name.lower().replace(' ', '_')}_{profile.id}@hll.local",
+        email=f"student_{request.display_name.lower().replace(' ', '_')}_new_{profile.id}@hll.local",
         password_hash="",  # Students don't use password login
         is_active=True,
         is_verified=True,
@@ -275,7 +278,7 @@ async def create_child(
     db.add(student_user)
     await db.flush()
     
-    # Create student profile
+    # Create student profile with generated username
     from app.models import GenderEnum
     gender = None
     if request.gender:
@@ -284,9 +287,13 @@ async def create_child(
         except ValueError:
             pass
     
+    # Generate username from display_name (will update with actual ID after flush)
+    temp_username = request.display_name.lower().replace(' ', '_')
+    
     student = StudentProfile(
         user_id=student_user.id,
         display_name=request.display_name,
+        username=temp_username,
         date_of_birth=dob,
         gender=gender,
         avatar_type=request.avatar_type or "elephant",
@@ -297,6 +304,12 @@ async def create_child(
     )
     db.add(student)
     await db.flush()
+    
+    # Update username with actual student ID
+    student.username = f"{request.display_name.lower().replace(' ', '_')}_{student.id}"
+    
+    # Update email with student ID
+    student_user.email = f"student_{request.display_name.lower().replace(' ', '_')}_{student.id}_{profile.id}@hll.local"
     
     # Create parent-student relationship
     relationship = ParentStudentRelationship(
@@ -369,6 +382,7 @@ async def create_child(
         is_active=student.is_active,
         progress_percentage=0,
         last_activity_at=student.last_activity_at.isoformat() if student.last_activity_at else None,
+        username=student.username,
     )
 
 
@@ -421,6 +435,7 @@ async def get_child(
         is_active=student.is_active,
         progress_percentage=progress,
         last_activity_at=student.last_activity_at.isoformat() if student.last_activity_at else None,
+        username=student.username,
     )
 
 
@@ -514,6 +529,7 @@ async def update_child(
         is_active=student.is_active,
         progress_percentage=progress,
         last_activity_at=student.last_activity_at.isoformat() if student.last_activity_at else None,
+        username=student.username,
     )
 
 

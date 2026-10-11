@@ -1,7 +1,21 @@
 import axios, { AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
 import { useAuth } from '@hooks/useAuth';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+// Use relative URL to go through Vite proxy in development
+// In production, VITE_API_URL should be set to the full API URL
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
+
+// Generate or retrieve a unique client ID stored in localStorage
+function getClientId(): string {
+  if (typeof window === 'undefined') return 'server';
+  
+  let clientId = localStorage.getItem('client_id');
+  if (!clientId) {
+    clientId = crypto.randomUUID();
+    localStorage.setItem('client_id', clientId);
+  }
+  return clientId;
+}
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -23,12 +37,18 @@ function getCsrfToken(): string | null {
   return null;
 }
 
-// Request interceptor to add auth token and CSRF token
+// Request interceptor to add auth token, CSRF token, and client ID
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const { accessToken } = useAuth.getState();
     if (accessToken && config.headers) {
       config.headers.Authorization = `Bearer ${accessToken}`;
+    }
+    
+    // Add client ID for rate limiting (helps in Docker environments)
+    const clientId = getClientId();
+    if (clientId && config.headers) {
+      config.headers['X-Client-ID'] = clientId;
     }
     
     // Add CSRF token for state-changing methods
@@ -258,6 +278,7 @@ export interface Child {
   is_active: boolean;
   progress_percentage: number;
   last_activity_at: string | null;
+  username: string;
 }
 
 export interface ParentProfile {

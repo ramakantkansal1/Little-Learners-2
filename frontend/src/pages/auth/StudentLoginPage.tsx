@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Loader2, User, Lock } from 'lucide-react';
 import { useAuth } from '@hooks/useAuth';
+import { api } from '@services/api';
 
 const studentLoginSchema = z.object({
   username: z.string().min(1, 'Username is required'),
@@ -29,24 +30,22 @@ export default function StudentLoginPage() {
   const onSubmit = async (data: StudentLoginForm) => {
     setError('');
     try {
-      const response = await fetch('/api/v1/auth/student/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(data),
-      });
+      const response = await api.post('/auth/student/login', data);
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error?.message || 'Login failed');
-      }
+      const result = response.data;
 
       // Backend returns TokenResponse directly (not wrapped in ApiResponse)
       setAuth(result.user, result.access_token, result.refresh_token);
       navigate('/student/dashboard', { replace: true });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else if (err && typeof err === 'object' && 'response' in err) {
+        const axiosError = err as { response?: { data?: { error?: { message?: string } } } };
+        setError(axiosError.response?.data?.error?.message || 'Login failed');
+      } else {
+        setError('Login failed. Please try again.');
+      }
     }
   };
 
@@ -57,12 +56,12 @@ export default function StudentLoginPage() {
           <User className="w-10 h-10 text-primary-500" />
         </div>
         <h2 className="text-xl font-display font-bold text-gray-900">Little Learner Login</h2>
-        <p className="text-gray-600 mt-1">Enter your name and PIN to start learning</p>
+        <p className="text-gray-600 mt-1">Enter your username and PIN to start learning</p>
       </div>
 
       <div>
         <label htmlFor="username" className="label">
-          Your Name
+          Username
         </label>
         <div className="relative">
           <input
@@ -70,7 +69,7 @@ export default function StudentLoginPage() {
             type="text"
             id="username"
             className={`input pl-12 ${errors.username ? 'input-error' : ''}`}
-            placeholder="Your name"
+            placeholder="Your username"
             autoComplete="username"
             disabled={isLoading}
           />

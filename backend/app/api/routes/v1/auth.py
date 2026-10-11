@@ -326,9 +326,9 @@ async def student_login(
     """Student login with username and PIN."""
     from app.models import StudentProfile
 
-    # Find student by display name (username)
+    # Find student by unique username
     result = await db.execute(
-        select(StudentProfile).where(StudentProfile.display_name == request.username)
+        select(StudentProfile).where(StudentProfile.username == request.username)
     )
     student = result.scalar_one_or_none()
 

@@ -234,6 +234,7 @@ class TestAuthEndpoints:
         
         assert child_response.status_code == 201
         child_id = child_response.json()["id"]
+        child_username = f"teststudent_{child_id}"
         
         # Now test student login
         # Create new client for student login (to avoid cookie conflicts)
@@ -253,7 +254,7 @@ class TestAuthEndpoints:
         response = await client.post(
             "/api/v1/auth/student/login",
             json={
-                "username": "TestStudent",
+                "username": child_username,
                 "pin": "1234",
             },
             headers={"X-CSRF-Token": csrf_token4},
@@ -287,9 +288,9 @@ class TestAuthEndpoints:
         assert data["error"]["code"] == "AUTHENTICATION_ERROR"
 
     @pytest.mark.asyncio
-    async def test_student_login_missing_pin(self, client: AsyncClient):
-        """Test student login when PIN not set fails."""
-        # Create a child without PIN
+    async def test_create_child_without_pin_fails(self, client: AsyncClient):
+        """Test that creating a child without PIN fails validation."""
+        # Register and login as parent
         csrf_response = await client.get("/api/v1/auth/csrf-token")
         csrf_token = csrf_response.json()["csrf_token"]
         
@@ -321,6 +322,7 @@ class TestAuthEndpoints:
         csrf_response3 = await client.get("/api/v1/auth/csrf-token")
         csrf_token3 = csrf_response3.json()["csrf_token"]
         
+        # Try to create child without PIN - should fail
         child_response = await client.post(
             "/api/v1/parents/me/children",
             json={
@@ -334,27 +336,13 @@ class TestAuthEndpoints:
             headers={"X-CSRF-Token": csrf_token3},
         )
         
-        assert child_response.status_code == 201
-        
-        # Try to login without PIN
-        client.cookies.clear()
-        csrf_response4 = await client.get("/api/v1/auth/csrf-token")
-        csrf_token4 = csrf_response4.json()["csrf_token"]
-        
-        response = await client.post(
-            "/api/v1/auth/student/login",
-            json={
-                "username": "NoPinChild",
-                "pin": "1234",
-            },
-            headers={"X-CSRF-Token": csrf_token4},
-        )
-        
-        assert response.status_code == 401
-        data = response.json()
+        assert child_response.status_code == 422
+        data = child_response.json()
         assert "error" in data
-        assert data["error"]["code"] == "AUTHENTICATION_ERROR"
-        assert "PIN not set" in data["error"]["message"]
+        assert data["error"]["code"] == "VALIDATION_ERROR"
+        # Check that PIN field is in the validation error
+        pin_error = any(d.get("field") == "pin" for d in data["error"]["details"])
+        assert pin_error, "PIN field should be required"
 
     @pytest.mark.asyncio
     async def test_student_login_rate_limiting(self, client: AsyncClient):
@@ -500,6 +488,7 @@ class TestParentChildEndpoints:
                 "avatar_type": "elephant",
                 "current_stage_id": 2,
                 "preferred_language": "en",
+                "pin": "1234",
             },
             headers={"X-CSRF-Token": csrf_token3},
         )
@@ -598,6 +587,7 @@ class TestParentChildEndpoints:
                 "avatar_type": "elephant",
                 "current_stage_id": 2,
                 "preferred_language": "en",
+                "pin": "1234",
             },
             headers={"X-CSRF-Token": csrf_token3},
         )
@@ -655,7 +645,7 @@ class TestPINUpdate:
             headers={"X-CSRF-Token": csrf_token2},
         )
         
-        # Create child without PIN
+        # Create child WITH initial PIN
         csrf_response3 = await client.get("/api/v1/auth/csrf-token")
         csrf_token3 = csrf_response3.json()["csrf_token"]
         
@@ -668,6 +658,7 @@ class TestPINUpdate:
                 "avatar_type": "elephant",
                 "current_stage_id": 2,
                 "preferred_language": "en",
+                "pin": "1234",  # Initial PIN
             },
             headers={"X-CSRF-Token": csrf_token3},
         )
@@ -675,7 +666,7 @@ class TestPINUpdate:
         assert child_response.status_code == 201
         child_id = child_response.json()["id"]
         
-        # Update PIN
+        # Update PIN to a new value
         csrf_response4 = await client.get("/api/v1/auth/csrf-token")
         csrf_token4 = csrf_response4.json()["csrf_token"]
         
@@ -687,21 +678,42 @@ class TestPINUpdate:
         
         assert response.status_code == 200
         
-        # Verify new PIN works for student login
-        client.cookies.clear()
-        csrf_response5 = await client.get("/api/v1/auth/csrf-token")
+        # Verify NEW PIN works for student login (use unique client ID to avoid rate limiting)
+        child_username = f"pinchild_{child_id}"
+        
+        from httpx import AsyncClient
+        student_client = AsyncClient(transport=client._transport, base_url="http://test")
+        
+        # Use different X-Client-ID for each login attempt
+        csrf_response5 = await student_client.get("/api/v1/auth/csrf-token")
         csrf_token5 = csrf_response5.json()["csrf_token"]
         
-        login_response = await client.post(
+        login_response = await student_client.post(
             "/api/v1/auth/student/login",
-            json={
-                "username": "PinChild",
-                "pin": "5678",
-            },
-            headers={"X-CSRF-Token": csrf_token5},
+            json={"username": child_username, "pin": "5678"},
+            headers={"X-CSRF-Token": csrf_token5, "X-Client-ID": "test-pin-update-new"},
         )
         
         assert login_response.status_code == 200
         data = login_response.json()
         assert "access_token" in data
         assert data["user"]["role"] == "student"
+        
+        # Verify OLD PIN no longer works
+        await student_client.aclose()
+        student_client2 = AsyncClient(transport=client._transport, base_url="http://test")
+        
+        csrf_response6 = await student_client2.get("/api/v1/auth/csrf-token")
+        csrf_token6 = csrf_response6.json()["csrf_token"]
+        
+        old_login = await student_client2.post(
+            "/api/v1/auth/student/login",
+            json={"username": child_username, "pin": "1234"},
+            headers={"X-CSRF-Token": csrf_token6, "X-Client-ID": "test-pin-update-old"},
+        )
+        
+        assert old_login.status_code == 401
+        data = old_login.json()
+        assert data["error"]["code"] == "AUTHENTICATION_ERROR"
+        
+        await student_client2.aclose()

@@ -465,7 +465,7 @@ export default function ChildProfilePage() {
               <div className="p-4 bg-gray-50 rounded-xl mb-4">
                 <p className="text-gray-600 mb-3">Your child can log in using:</p>
                 <div className="flex items-center gap-2 p-3 bg-white rounded-xl border border-gray-200">
-                  <span className="font-mono text-lg font-semibold text-gray-900 bg-gray-50 px-3 py-1.5 rounded">{child.display_name.toUpperCase()}</span>
+                  <span className="font-mono text-lg font-semibold text-gray-900 bg-gray-50 px-3 py-1.5 rounded">{child.username}</span>
                   <span className="text-gray-500">+ 4-digit PIN</span>
                 </div>
               </div>

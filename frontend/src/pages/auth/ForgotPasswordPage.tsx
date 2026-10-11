@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Loader2, Mail, ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
+import { api } from '@services/api';
 
 const forgotPasswordSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -27,23 +28,21 @@ export default function ForgotPasswordPage() {
     setStatus('loading');
     setError('');
     try {
-      const response = await fetch('/api/v1/auth/forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(data),
-      });
+      await api.post('/auth/forgot-password', data);
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error?.message || 'Request failed');
-      }
+      
 
       setStatus('success');
-    } catch (err) {
+    } catch (err: unknown) {
       setStatus('error');
-      setError(err instanceof Error ? err.message : 'Something went wrong');
+      if (err instanceof Error) {
+        setError(err.message);
+      } else if (err && typeof err === 'object' && 'response' in err) {
+        const axiosError = err as { response?: { data?: { error?: { message?: string } } } };
+        setError(axiosError.response?.data?.error?.message || 'Something went wrong');
+      } else {
+        setError('Something went wrong');
+      }
     }
   };
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Star, Award, Medal, Sparkles, Lock, Trophy } from 'lucide-react';
-import { parentApi, type Child } from '@services';
+import { parentApi, type Child, type Reward } from '@services';
 
 const typeIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   star: Star,
@@ -14,18 +14,6 @@ const TypeIcon = ({ type, className }: { type: string; className?: string }) => 
   const Icon = typeIcons[type];
   return Icon ? <Icon className={className} /> : null;
 };
-
-interface Reward {
-  id: number;
-  code: string;
-  name: string;
-  description: string | null;
-  reward_type: string;
-  image_url: string | null;
-  points_value: number;
-  earned: boolean;
-  earned_at: string | null;
-}
 
 export default function ChildRewardsPage() {
   const { childId } = useParams<{ childId: string }>();

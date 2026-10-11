@@ -61,7 +61,7 @@ export default function DashboardPage() {
     loadData();
   }, []);
 
-  const parentName = user?.role === 'parent' ? 'Priya' : 'Parent'; // TODO: get from profile
+  const parentName = user?.role === 'parent' ? 'Parent' : 'Parent'; // TODO: get from profile
 
   if (loading) {
     return (
@@ -255,13 +255,24 @@ export default function DashboardPage() {
               <p className="text-sm text-gray-600">Detailed reports</p>
             </Link>
           )}
-          <Link to="/parent/children" className="card p-6 text-center group">
-            <div className="w-12 h-12 rounded-xl bg-pastel-pink flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
-              <Trophy className="w-6 h-6 text-primary-500" />
-            </div>
-            <h3 className="font-semibold text-gray-900 mb-1">Rewards</h3>
-            <p className="text-sm text-gray-600">View children's achievements</p>
-          </Link>
+          {children[0] && (
+            <Link to={`/parent/children/${children[0].id}/rewards`} className="card p-6 text-center group">
+              <div className="w-12 h-12 rounded-xl bg-pastel-pink flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+                <Trophy className="w-6 h-6 text-primary-500" />
+              </div>
+              <h3 className="font-semibold text-gray-900 mb-1">Rewards</h3>
+              <p className="text-sm text-gray-600">{children[0].display_name}'s achievements</p>
+            </Link>
+          )}
+          {children.length <= 1 && (
+            <Link to="/parent/children" className="card p-6 text-center group">
+              <div className="w-12 h-12 rounded-xl bg-pastel-pink flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+                <Trophy className="w-6 h-6 text-primary-500" />
+              </div>
+              <h3 className="font-semibold text-gray-900 mb-1">Rewards</h3>
+              <p className="text-sm text-gray-600">Add a child to view rewards</p>
+            </Link>
+          )}
           <Link to="/parent/settings" className="card p-6 text-center group">
             <div className="w-12 h-12 rounded-xl bg-pastel-yellow flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
               <Target className="w-6 h-6 text-primary-500" />

@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '@hooks/useAuth';
+import { api } from '@services/api';
 
 const registerSchema = z.object({
   full_name: z.string().min(1, 'Full name is required').max(255),
@@ -38,18 +39,14 @@ export default function ParentRegisterPage() {
   const onSubmit = async (data: RegisterForm) => {
     setError('');
     try {
-      const response = await fetch('/api/v1/auth/parent/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(data),
-      });
+      // Normalize empty phone number to null for backend compatibility
+      const payload = {
+        ...data,
+        phone_number: data.phone_number === '' ? null : data.phone_number,
+      };
+      const response = await api.post('/auth/parent/register', payload);
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error?.message || 'Registration failed');
-      }
+      const result = response.data;
 
       if (result.user_id) {
         // If email verification is required, redirect to login
@@ -59,15 +56,14 @@ export default function ParentRegisterPage() {
         }
 
         // Auto-login if verified
-        const loginResponse = await fetch('/api/v1/auth/parent/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ email: data.email, password: data.password, remember_me: false }),
+        const loginResponse = await api.post('/auth/parent/login', {
+          email: data.email,
+          password: data.password,
+          remember_me: false,
         });
 
-        const loginResult = await loginResponse.json();
-        if (loginResponse.ok) {
+        const loginResult = loginResponse.data;
+        if (loginResult.access_token) {
           // Backend returns TokenResponse directly (not wrapped in ApiResponse)
           setAuth(loginResult.user, loginResult.access_token, loginResult.refresh_token);
           navigate('/parent/dashboard', { replace: true });
@@ -75,8 +71,15 @@ export default function ParentRegisterPage() {
           navigate('/auth/parent/login', { replace: true });
         }
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed. Please try again.');
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else if (err && typeof err === 'object' && 'response' in err) {
+        const axiosError = err as { response?: { data?: { error?: { message?: string } } } };
+        setError(axiosError.response?.data?.error?.message || 'Registration failed');
+      } else {
+        setError('Registration failed. Please try again.');
+      }
     }
   };
 

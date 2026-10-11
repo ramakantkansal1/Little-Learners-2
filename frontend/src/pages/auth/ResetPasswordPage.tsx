@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Loader2, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
+import { api } from '@services/api';
 
 const resetPasswordSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),
@@ -40,23 +41,21 @@ export default function ResetPasswordPage() {
     setStatus('loading');
     setError('');
     try {
-      const response = await fetch('/api/v1/auth/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ token, password: data.password, confirm_password: data.confirm_password }),
-      });
+      await api.post('/auth/reset-password', { token, password: data.password, confirm_password: data.confirm_password });
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error?.message || 'Reset failed');
-      }
+      
 
       setStatus('success');
-    } catch (err) {
+    } catch (err: unknown) {
       setStatus('error');
-      setError(err instanceof Error ? err.message : 'Something went wrong');
+      if (err instanceof Error) {
+        setError(err.message);
+      } else if (err && typeof err === 'object' && 'response' in err) {
+        const axiosError = err as { response?: { data?: { error?: { message?: string } } } };
+        setError(axiosError.response?.data?.error?.message || 'Something went wrong');
+      } else {
+        setError('Something went wrong');
+      }
     }
   };
 
