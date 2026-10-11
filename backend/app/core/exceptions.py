@@ -10,6 +10,8 @@ from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError, OperationalError
 import structlog
 
+from app.core.config import settings
+
 logger = structlog.get_logger(__name__)
 
 

@@ -177,7 +177,12 @@ class Lesson(Base, IDMixin, TimestampMixin, SoftDeleteMixin):
 
     topic_id: Mapped[int] = mapped_column(ForeignKey("topics.id", ondelete="CASCADE"), nullable=False, index=True)
     code: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    status: Mapped[ContentStatusEnum] = mapped_column(SQLEnum(ContentStatusEnum), default=ContentStatusEnum.DRAFT, nullable=False, index=True)
+    status: Mapped[ContentStatusEnum] = mapped_column(
+        SQLEnum(ContentStatusEnum, values_callable=lambda x: [e.value for e in x]),
+        default=ContentStatusEnum.DRAFT,
+        nullable=False,
+        index=True,
+    )
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     estimated_duration_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     thumbnail_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
@@ -245,9 +250,17 @@ class Activity(Base, IDMixin, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "activities"
 
     lesson_id: Mapped[int] = mapped_column(ForeignKey("lessons.id", ondelete="CASCADE"), nullable=False, index=True)
-    type: Mapped[ActivityTypeEnum] = mapped_column(SQLEnum(ActivityTypeEnum), nullable=False, index=True)
+    type: Mapped[ActivityTypeEnum] = mapped_column(
+        SQLEnum(ActivityTypeEnum, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        index=True,
+    )
     code: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    status: Mapped[ContentStatusEnum] = mapped_column(SQLEnum(ContentStatusEnum), default=ContentStatusEnum.DRAFT, nullable=False)
+    status: Mapped[ContentStatusEnum] = mapped_column(
+        SQLEnum(ContentStatusEnum, values_callable=lambda x: [e.value for e in x]),
+        default=ContentStatusEnum.DRAFT,
+        nullable=False,
+    )
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     estimated_duration_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

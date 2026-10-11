@@ -45,7 +45,8 @@ export default function ParentLoginPage() {
         throw new Error(result.error?.message || 'Login failed');
       }
 
-      setAuth(result.data.user, result.data.access_token, result.data.refresh_token);
+      // Backend returns TokenResponse directly (not wrapped in ApiResponse)
+      setAuth(result.user, result.access_token, result.refresh_token);
       navigate('/parent/dashboard', { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed. Please try again.');

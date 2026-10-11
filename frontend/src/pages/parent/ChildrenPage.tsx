@@ -1,39 +1,201 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, User, Edit } from 'lucide-react';
-import { useState } from 'react';
+import { Plus, User, Edit, Trash2, Loader2 } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { parentApi, type Child, type ChildCreateRequest, type ChildUpdateRequest } from '@services';
+import { useAuth } from '@hooks/useAuth';
 
-const children = [
-  { id: 1, name: 'Aarav', age: 4, stage: 'Nursery', avatar: '👦', progress: 65, isActive: true },
-  { id: 2, name: 'Anaya', age: 6, stage: 'UKG', avatar: '👧', progress: 82, isActive: true },
-];
+const childSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100),
+  age: z.coerce.number().min(2, 'Minimum age is 2').max(6, 'Maximum age is 6'),
+  stage: z.string().min(1, 'Please select a stage'),
+  avatar: z.string().min(1, 'Please select an avatar'),
+  pin: z.string().regex(/^\d{4,6}$/, 'PIN must be 4-6 digits').optional().or(z.literal('')),
+});
+
+type ChildForm = z.infer<typeof childSchema>;
 
 const stages = [
-  { code: 'playgroup', name: 'Playgroup / Pre-Nursery (2-3)' },
-  { code: 'nursery', name: 'Nursery (3-4)' },
-  { code: 'lkg', name: 'LKG (4-5)' },
-  { code: 'ukg', name: 'UKG (5-6)' },
+  { id: 1, code: 'playgroup', name: 'Playgroup / Pre-Nursery (2-3)' },
+  { id: 2, code: 'nursery', name: 'Nursery (3-4)' },
+  { id: 3, code: 'lkg', name: 'LKG (4-5)' },
+  { id: 4, code: 'ukg', name: 'UKG (5-6)' },
+];
+
+const avatars = [
+  { value: 'boy', label: '👦 Boy' },
+  { value: 'girl', label: '👧 Girl' },
+  { value: 'elephant', label: '🐘 Elephant' },
+  { value: 'owl', label: '🦉 Owl' },
+  { value: 'rabbit', label: '🐰 Rabbit' },
+  { value: 'tiger', label: '🐯 Tiger' },
 ];
 
 export default function ChildrenPage() {
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [editingChild, setEditingChild] = useState<typeof children[0] | null>(null);
+  const [children, setChildren] = useState<Child[]>([]);
+  const [showModal, setShowModal] = useState(false);
+  const [editingChild, setEditingChild] = useState<Child | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { isLoading: authLoading } = useAuth();
 
-  const handleAddChild = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const newChild = {
-      id: Date.now(),
-      name: formData.get('name') as string,
-      age: parseInt(formData.get('age') as string),
-      stage: formData.get('stage') as string,
-      avatar: formData.get('avatar') as string || '👶',
-      progress: 0,
-      isActive: true,
-    };
-    children.push(newChild);
-    setShowAddModal(false);
-    e.currentTarget.reset();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<ChildForm>({
+    resolver: zodResolver(childSchema),
+    defaultValues: { pin: '' },
+  });
+
+  const loadChildren = async () => {
+    try {
+      setLoading(true);
+      const response = await parentApi.getChildren();
+      setChildren(response.data);
+    } catch (err) {
+      setError('Failed to load children');
+      console.error('Load children error:', err);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    if (!authLoading) {
+      loadChildren();
+    }
+  }, [authLoading]);
+
+  const openAddModal = () => {
+    setEditingChild(null);
+    reset({ name: '', age: undefined, stage: '', avatar: 'boy', pin: '' });
+    setShowModal(true);
+  };
+
+  const openEditModal = (child: Child) => {
+    setEditingChild(child);
+    reset({
+      name: child.display_name,
+      age: child.date_of_birth 
+        ? new Date().getFullYear() - new Date(child.date_of_birth).getFullYear()
+        : undefined,
+      stage: child.current_stage_name || child.current_stage_code || '',
+      avatar: child.avatar_type || 'boy',
+      pin: '',
+    });
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingChild(null);
+    reset({ name: '', age: undefined, stage: '', avatar: 'boy', pin: '' });
+  };
+
+  const onSubmit = async (data: ChildForm) => {
+    try {
+      setSaving(true);
+      setError(null);
+
+      // Calculate date of birth from age
+      const dob = new Date();
+      dob.setFullYear(dob.getFullYear() - data.age);
+      const dateOfBirth = dob.toISOString().split('T')[0];
+
+      // Map avatar value to avatar_type
+      const avatarTypeMap: Record<string, string> = {
+        'boy': 'boy',
+        'girl': 'girl',
+        'elephant': 'elephant',
+        'owl': 'owl',
+        'rabbit': 'rabbit',
+        'tiger': 'tiger',
+      };
+
+      // Map stage display name to stage code
+      const stageCode = stages.find(s => s.name === data.stage)?.code || data.stage;
+
+      const stageId = stages.find(s => s.code === stageCode)?.id || 1;
+
+      if (editingChild) {
+        // Update existing child
+        const updateData: ChildUpdateRequest = {
+          display_name: data.name,
+          date_of_birth: dateOfBirth,
+          current_stage_id: stageId,
+          avatar_type: avatarTypeMap[data.avatar],
+          pin: data.pin || undefined,
+        };
+        await parentApi.updateChild(editingChild.id, updateData);
+      } else {
+        // Create new child
+        const createData: ChildCreateRequest = {
+          display_name: data.name,
+          date_of_birth: dateOfBirth,
+          avatar_type: avatarTypeMap[data.avatar],
+          current_stage_id: stageId,
+          preferred_language: 'en',
+          pin: data.pin || undefined,
+        };
+        await parentApi.createChild(createData);
+      }
+
+      closeModal();
+      await loadChildren();
+    } catch (err) {
+      setError('Failed to save child. Please try again.');
+      console.error('Save child error:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeactivate = async (childId: number) => {
+    if (!confirm('Are you sure you want to deactivate this child profile? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await parentApi.deactivateChild(childId);
+      await loadChildren();
+    } catch (err) {
+      setError('Failed to deactivate child');
+      console.error('Deactivate child error:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getAvatarEmoji = (avatarType: string | undefined): string => {
+    const avatarMap: Record<string, string> = {
+      boy: '👦',
+      girl: '👧',
+      elephant: '🐘',
+      owl: '🦉',
+      rabbit: '🐰',
+      tiger: '🐯',
+    };
+    return avatarMap[avatarType || 'boy'] || '👦';
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-pastel-blue mb-4">
+            <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
+          </div>
+          <p className="text-gray-600">Loading children...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -43,13 +205,20 @@ export default function ChildrenPage() {
           <p className="text-gray-600 mt-1">Manage your children's profiles and learning stages</p>
         </div>
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={openAddModal}
           className="btn btn-primary"
+          disabled={saving}
         >
           <Plus className="w-5 h-5" />
           Add Child
         </button>
       </div>
+
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm" role="alert">
+          {error}
+        </div>
+      )}
 
       {children.length === 0 ? (
         <div className="card p-12 text-center">
@@ -58,7 +227,7 @@ export default function ChildrenPage() {
           </div>
           <h3 className="text-xl font-display font-bold text-gray-900 mb-2">No children added yet</h3>
           <p className="text-gray-600 mb-6">Add your first child to start their learning journey</p>
-          <button onClick={() => setShowAddModal(true)} className="btn btn-primary">
+          <button onClick={openAddModal} className="btn btn-primary">
             <Plus className="w-5 h-5" />
             Add Child
           </button>
@@ -69,26 +238,30 @@ export default function ChildrenPage() {
             <div key={child.id} className="card p-6">
               <div className="flex items-start gap-4 mb-4">
                 <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-pastel-blue to-pastel-green flex items-center justify-center text-3xl flex-shrink-0">
-                  {child.avatar}
+                  {getAvatarEmoji(child.avatar_type || undefined)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <h3 className="text-lg font-display font-bold text-gray-900">{child.name}</h3>
-                    <span className="badge badge-primary">{child.stage}</span>
+                    <h3 className="text-lg font-display font-bold text-gray-900">{child.display_name}</h3>
+                    <span className="badge badge-primary">{child.current_stage_name || child.current_stage_code || 'Unknown'}</span>
                   </div>
-                  <p className="text-sm text-gray-500">Age {child.age}</p>
+                  <p className="text-sm text-gray-500">
+                    {child.date_of_birth 
+                      ? `Age ${new Date().getFullYear() - new Date(child.date_of_birth).getFullYear()}`
+                      : 'Age unknown'}
+                  </p>
                 </div>
               </div>
 
               <div className="space-y-3 mb-4 p-4 bg-gray-50 rounded-xl">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">Overall Progress</span>
-                  <span className="font-semibold text-gray-900">{child.progress}%</span>
+                  <span className="font-semibold text-gray-900">{child.progress_percentage}%</span>
                 </div>
                 <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-pastel-blue to-pastel-green rounded-full"
-                    style={{ width: `${child.progress}%` }}
+                    style={{ width: `${child.progress_percentage}%` }}
                   />
                 </div>
               </div>
@@ -101,11 +274,18 @@ export default function ChildrenPage() {
                   View Progress
                 </Link>
                 <button
-                  onClick={() => setEditingChild(child)}
+                  onClick={() => openEditModal(child)}
                   className="btn btn-ghost"
                   aria-label="Edit profile"
                 >
                   <Edit className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => handleDeactivate(child.id)}
+                  className="btn btn-ghost text-red-500 hover:bg-red-50"
+                  aria-label="Deactivate child"
+                >
+                  <Trash2 className="w-5 h-5" />
                 </button>
               </div>
             </div>
@@ -114,7 +294,7 @@ export default function ChildrenPage() {
       )}
 
       {/* Add/Edit Child Modal */}
-      {(showAddModal || editingChild) && (
+      {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-100 flex items-center justify-between">
@@ -122,7 +302,7 @@ export default function ChildrenPage() {
                 {editingChild ? 'Edit Child' : 'Add New Child'}
               </h2>
               <button
-                onClick={() => { setShowAddModal(false); setEditingChild(null); }}
+                onClick={closeModal}
                 className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -131,66 +311,128 @@ export default function ChildrenPage() {
               </button>
             </div>
 
-            <form onSubmit={editingChild ? () => {} : handleAddChild} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
               <div>
                 <label htmlFor="name" className="label">Child's Name</label>
                 <input
+                  {...register('name')}
                   type="text"
                   id="name"
-                  name="name"
-                  defaultValue={editingChild?.name}
-                  className="input"
-                  required
+                  className={`input ${errors.name ? 'input-error' : ''}`}
                   placeholder="Enter name"
+                  required
+                  disabled={saving}
                 />
+                {errors.name && (
+                  <p className="mt-1.5 text-sm text-red-500">{errors.name.message}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="age" className="label">Age</label>
-                  <select id="age" name="age" defaultValue={editingChild?.age} className="input" required>
+                  <select
+                    {...register('age')}
+                    id="age"
+                    className={`input ${errors.age ? 'input-error' : ''}`}
+                    required
+                    disabled={saving}
+                  >
                     <option value="">Select age</option>
                     {Array.from({ length: 5 }, (_, i) => i + 2).map(age => (
                       <option key={age} value={age}>{age} years</option>
                     ))}
                   </select>
+                  {errors.age && (
+                    <p className="mt-1.5 text-sm text-red-500">{errors.age.message}</p>
+                  )}
                 </div>
                 <div>
                   <label htmlFor="stage" className="label">Learning Stage</label>
-                  <select id="stage" name="stage" defaultValue={editingChild?.stage?.toLowerCase()} className="input" required>
+                  <select
+                    {...register('stage')}
+                    id="stage"
+                    className={`input ${errors.stage ? 'input-error' : ''}`}
+                    required
+                    disabled={saving}
+                  >
                     <option value="">Select stage</option>
                     {stages.map(s => (
-                      <option key={s.code} value={s.code}>{s.name}</option>
+                      <option key={s.code} value={s.name}>{s.name}</option>
                     ))}
                   </select>
+                  {errors.stage && (
+                    <p className="mt-1.5 text-sm text-red-500">{errors.stage.message}</p>
+                  )}
                 </div>
               </div>
 
               <div>
                 <label htmlFor="avatar" className="label">Avatar</label>
-                <select id="avatar" name="avatar" defaultValue={editingChild?.avatar} className="input">
-                  <option value="👦">👦 Boy</option>
-                  <option value="👧">👧 Girl</option>
-                  <option value="🐘">🐘 Elephant</option>
-                  <option value="🦉">🦉 Owl</option>
-                  <option value="🐰">🐰 Rabbit</option>
-                  <option value="🐯">🐯 Tiger</option>
+                <select
+                  {...register('avatar')}
+                  id="avatar"
+                  className={`input ${errors.avatar ? 'input-error' : ''}`}
+                  required
+                  disabled={saving}
+                >
+                  {avatars.map(a => (
+                    <option key={a.value} value={a.value}>{a.label}</option>
+                  ))}
                 </select>
+                {errors.avatar && (
+                  <p className="mt-1.5 text-sm text-red-500">{errors.avatar.message}</p>
+                )}
               </div>
+
+              <div>
+                <label htmlFor="pin" className="label">
+                  PIN (Optional) <span className="text-sm text-gray-400">(4-6 digits for child login)</span>
+                </label>
+                <input
+                  {...register('pin')}
+                  type="password"
+                  id="pin"
+                  className={`input ${errors.pin ? 'input-error' : ''}`}
+                  placeholder="••••"
+                  autoComplete="off"
+                  disabled={saving}
+                  inputMode="numeric"
+                />
+                {errors.pin && (
+                  <p className="mt-1.5 text-sm text-red-500">{errors.pin.message}</p>
+                )}
+                <p className="mt-1 text-sm text-gray-500">Leave blank to keep current PIN</p>
+              </div>
+
+              {error && (
+                <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm" role="alert">
+                  {error}
+                </div>
+              )}
 
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => { setShowAddModal(false); setEditingChild(null); }}
+                  onClick={closeModal}
                   className="btn btn-secondary flex-1"
+                  disabled={saving}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   className="btn btn-primary flex-1"
+                  disabled={saving}
                 >
-                  {editingChild ? 'Save Changes' : 'Add Child'}
+                  {saving ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    editingChild ? 'Save Changes' : 'Add Child'
+                  )}
                 </button>
               </div>
             </form>

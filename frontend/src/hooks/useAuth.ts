@@ -75,7 +75,7 @@ export const useAuth = create<AuthState>()(
           // Try to get current user info
           const response = await api.get('/auth/me');
           set({
-            user: response.data.data,
+            user: response.data,
             isAuthenticated: true,
             isLoading: false,
           });
@@ -94,7 +94,7 @@ export const useAuth = create<AuthState>()(
 
         try {
           const response = await api.post('/auth/refresh', { refresh_token: refreshToken });
-          const { access_token, refresh_token, user } = response.data.data;
+          const { access_token, refresh_token, user } = response.data;
           set({
             user,
             accessToken: access_token,

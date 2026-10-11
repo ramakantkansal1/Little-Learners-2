@@ -29,8 +29,13 @@ async def get_current_user(
     if not token_data or token_data.type != "access":
         raise AuthorizationException("Invalid or expired token")
 
-    # Fetch user from database
-    result = await db.execute(select(User).where(User.id == int(token_data.sub)))
+    # Fetch user from database with roles eagerly loaded
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(
+        select(User)
+        .where(User.id == int(token_data.sub))
+        .options(selectinload(User.user_roles).selectinload(UserRole.role))
+    )
     user = result.scalar_one_or_none()
 
     if not user or user.is_deleted or not user.is_active:
@@ -54,11 +59,11 @@ def get_user_roles(user: User) -> list[RoleEnum]:
     """Extract role enums from user's roles."""
     roles = []
     for user_role in user.user_roles:
-        if not user_role.role.is_deleted:
-            try:
-                roles.append(RoleEnum(user_role.role.name))
-            except ValueError:
-                pass
+        # Role model doesn't have soft delete, so no is_deleted check needed
+        try:
+            roles.append(RoleEnum(user_role.role.name))
+        except ValueError:
+            pass
     return roles
 
 

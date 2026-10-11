@@ -42,7 +42,12 @@ class StudentEnrollment(Base, IDMixin, TimestampMixin, SoftDeleteMixin):
     student_id: Mapped[int] = mapped_column(ForeignKey("student_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
     stage_id: Mapped[int] = mapped_column(ForeignKey("learning_stages.id", ondelete="CASCADE"), nullable=False, index=True)
     subject_id: Mapped[Optional[int]] = mapped_column(ForeignKey("subjects.id", ondelete="CASCADE"), nullable=True, index=True)
-    status: Mapped[EnrollmentStatusEnum] = mapped_column(SQLEnum(EnrollmentStatusEnum), default=EnrollmentStatusEnum.ACTIVE, nullable=False, index=True)
+    status: Mapped[EnrollmentStatusEnum] = mapped_column(
+        SQLEnum(EnrollmentStatusEnum, values_callable=lambda x: [e.value for e in x]),
+        default=EnrollmentStatusEnum.ACTIVE,
+        nullable=False,
+        index=True,
+    )
     enrolled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     assigned_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
@@ -70,7 +75,12 @@ class StudentLessonProgress(Base, IDMixin, TimestampMixin):
 
     student_id: Mapped[int] = mapped_column(ForeignKey("student_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
     lesson_id: Mapped[int] = mapped_column(ForeignKey("lessons.id", ondelete="CASCADE"), nullable=False, index=True)
-    status: Mapped[LessonProgressStatusEnum] = mapped_column(SQLEnum(LessonProgressStatusEnum), default=LessonProgressStatusEnum.NOT_STARTED, nullable=False, index=True)
+    status: Mapped[LessonProgressStatusEnum] = mapped_column(
+        SQLEnum(LessonProgressStatusEnum, values_callable=lambda x: [e.value for e in x]),
+        default=LessonProgressStatusEnum.NOT_STARTED,
+        nullable=False,
+        index=True,
+    )
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_activity_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -101,14 +111,19 @@ class ActivityAttempt(Base, IDMixin, TimestampMixin):
     activity_id: Mapped[int] = mapped_column(ForeignKey("activities.id", ondelete="CASCADE"), nullable=False, index=True)
     lesson_progress_id: Mapped[Optional[int]] = mapped_column(ForeignKey("student_lesson_progress.id", ondelete="SET NULL"), nullable=True, index=True)
     attempt_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    status: Mapped[AttemptStatusEnum] = mapped_column(SQLEnum(AttemptStatusEnum), default=AttemptStatusEnum.STARTED, nullable=False, index=True)
+    status: Mapped[AttemptStatusEnum] = mapped_column(
+        SQLEnum(AttemptStatusEnum, values_callable=lambda x: [e.value for e in x]),
+        default=AttemptStatusEnum.STARTED,
+        nullable=False,
+        index=True,
+    )
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     time_spent_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Percentage score
     max_score: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
     passed: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
-    additional_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # Additional attempt data
+    metadata_json: Mapped[Optional[dict]] = mapped_column("metadata", JSON, nullable=True)  # Additional attempt data
 
     # Relationships
     student: Mapped["StudentProfile"] = relationship(back_populates="activity_attempts")
@@ -137,7 +152,7 @@ class ActivityResponse(Base, IDMixin, TimestampMixin):
     is_correct: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     points_earned: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     time_spent_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    extra_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # Drag-drop positions, text input, etc.
+    metadata_json: Mapped[Optional[dict]] = mapped_column("metadata", JSON, nullable=True)  # Drag-drop positions, text input, etc.
 
     # Relationships
     attempt: Mapped["ActivityAttempt"] = relationship(back_populates="responses")
@@ -182,7 +197,7 @@ class StudentRewardAward(Base, IDMixin, TimestampMixin):
     reward_id: Mapped[int] = mapped_column(ForeignKey("student_rewards.id", ondelete="CASCADE"), nullable=False, index=True)
     attempt_id: Mapped[Optional[int]] = mapped_column(ForeignKey("activity_attempts.id", ondelete="SET NULL"), nullable=True, index=True)
     earned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    extra_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    metadata_json: Mapped[Optional[dict]] = mapped_column("metadata", JSON, nullable=True)
 
     # Relationships
     student: Mapped["StudentProfile"] = relationship(back_populates="reward_awards")

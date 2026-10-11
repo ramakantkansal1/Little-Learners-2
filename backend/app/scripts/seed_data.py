@@ -19,6 +19,7 @@ from app.models import (
     Lesson, LessonTranslation, Activity, ActivityTranslation,
     Question, QuestionTranslation, AnswerOption, AnswerOptionTranslation,
     StudentReward, ContentStatusEnum, ActivityTypeEnum,
+    Role,
 )
 from app.permissions.roles import Role as RoleEnum
 
@@ -535,6 +536,26 @@ async def seed_topics_and_content(db: AsyncSession, stages: dict[str, LearningSt
     await db.commit()
 
 
+async def seed_roles(db: AsyncSession):
+    """Seed system roles."""
+    from app.permissions.roles import Role as RoleEnum
+    
+    roles_data = [
+        {"name": RoleEnum.ADMIN.value, "description": "System administrator", "is_system": True},
+        {"name": RoleEnum.PARENT.value, "description": "Parent/guardian", "is_system": True},
+        {"name": RoleEnum.STUDENT.value, "description": "Student/child", "is_system": True},
+    ]
+    
+    for role_data in roles_data:
+        result = await db.execute(select(Role).where(Role.name == role_data["name"]))
+        role = result.scalar_one_or_none()
+        if not role:
+            role = Role(**role_data)
+            db.add(role)
+    
+    await db.commit()
+
+
 async def seed_rewards(db: AsyncSession):
     """Seed student rewards."""
     rewards_data = [
@@ -567,6 +588,11 @@ async def main():
 
     async with async_session_factory() as db:
         try:
+            # Seed roles
+            print("Seeding system roles...")
+            await seed_roles(db)
+            print("System roles seeded")
+
             # Seed stages
             print("Seeding learning stages...")
             stages = await seed_stages(db)

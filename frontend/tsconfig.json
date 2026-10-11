@@ -23,6 +23,7 @@
       "@hooks/*": ["src/hooks/*"],
       "@layouts/*": ["src/layouts/*"],
       "@pages/*": ["src/pages/*"],
+      "@services": ["src/services"],
       "@services/*": ["src/services/*"],
       "@schemas/*": ["src/schemas/*"],
       "@types/*": ["src/types/*"],

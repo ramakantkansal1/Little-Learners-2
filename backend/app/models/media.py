@@ -27,7 +27,11 @@ class MediaAsset(Base, IDMixin, TimestampMixin, SoftDeleteMixin):
     original_name: Mapped[str] = mapped_column(String(255), nullable=False)
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
     file_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    media_type: Mapped[MediaTypeEnum] = mapped_column(SQLEnum(MediaTypeEnum), nullable=False, index=True)
+    media_type: Mapped[MediaTypeEnum] = mapped_column(
+        SQLEnum(MediaTypeEnum, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        index=True,
+    )
     mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)
     width: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -122,7 +126,11 @@ class ParentNotification(Base, IDMixin, TimestampMixin):
 
     parent_id: Mapped[int] = mapped_column(ForeignKey("parent_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
     student_id: Mapped[Optional[int]] = mapped_column(ForeignKey("student_profiles.id", ondelete="CASCADE"), nullable=True, index=True)
-    notification_type: Mapped[NotificationTypeEnum] = mapped_column(SQLEnum(NotificationTypeEnum), nullable=False, index=True)
+    notification_type: Mapped[NotificationTypeEnum] = mapped_column(
+        SQLEnum(NotificationTypeEnum, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        index=True,
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # Additional context (lesson_id, reward_id, etc.)
@@ -173,7 +181,11 @@ class AuditLog(Base, IDMixin):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
 
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
-    action: Mapped[AuditActionEnum] = mapped_column(SQLEnum(AuditActionEnum), nullable=False, index=True)
+    action: Mapped[AuditActionEnum] = mapped_column(
+        SQLEnum(AuditActionEnum, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        index=True,
+    )
     resource_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)  # user, lesson, activity, etc.
     resource_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
     resource_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

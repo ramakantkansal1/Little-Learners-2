@@ -51,9 +51,9 @@ export default function ParentRegisterPage() {
         throw new Error(result.error?.message || 'Registration failed');
       }
 
-      if (result.data.user_id) {
+      if (result.user_id) {
         // If email verification is required, redirect to login
-        if (result.data.email_verification_required) {
+        if (result.email_verification_required) {
           navigate('/auth/parent/login?verified=false', { replace: true });
           return;
         }
@@ -68,7 +68,8 @@ export default function ParentRegisterPage() {
 
         const loginResult = await loginResponse.json();
         if (loginResponse.ok) {
-          setAuth(loginResult.data.user, loginResult.data.access_token, loginResult.data.refresh_token);
+          // Backend returns TokenResponse directly (not wrapped in ApiResponse)
+          setAuth(loginResult.user, loginResult.access_token, loginResult.refresh_token);
           navigate('/parent/dashboard', { replace: true });
         } else {
           navigate('/auth/parent/login', { replace: true });

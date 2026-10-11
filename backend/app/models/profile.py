@@ -28,7 +28,7 @@ class ParentProfile(Base, IDMixin, TimestampMixin, SoftDeleteMixin):
     phone_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)
     phone_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    gender: Mapped[Optional[GenderEnum]] = mapped_column(SQLEnum(GenderEnum), nullable=True)
+    gender: Mapped[Optional[GenderEnum]] = mapped_column(SQLEnum(GenderEnum, values_callable=lambda x: [e.value for e in x]), nullable=True)
     avatar_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -62,7 +62,7 @@ class StudentProfile(Base, IDMixin, TimestampMixin, SoftDeleteMixin):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
     date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    gender: Mapped[Optional[GenderEnum]] = mapped_column(SQLEnum(GenderEnum), nullable=True)
+    gender: Mapped[Optional[GenderEnum]] = mapped_column(SQLEnum(GenderEnum, values_callable=lambda x: [e.value for e in x]), nullable=True)
     avatar_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     avatar_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # e.g., "elephant", "owl", "rabbit"
     pin_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # For child-friendly login

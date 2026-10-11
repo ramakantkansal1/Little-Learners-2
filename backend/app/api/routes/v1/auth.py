@@ -3,6 +3,7 @@ Authentication endpoints.
 """
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+import hashlib
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -166,7 +167,7 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str, 
     response.set_cookie(
         key="csrf_token",
         value=csrf_token,
-        httponly=True,
+        httponly=False,  # Allow JavaScript to read the CSRF token
         secure=settings.APP_ENV == "production",
         samesite="strict",
         max_age=refresh_max_age,
@@ -263,7 +264,7 @@ async def parent_login(
         raise AuthenticationException("Invalid credentials")
 
     # Check if user has parent role
-    user_roles = [ur.role.name for ur in user.user_roles if not ur.role.is_deleted]
+    user_roles = [ur.role.name for ur in user.user_roles]
     if RoleEnum.PARENT.value not in user_roles and RoleEnum.ADMIN.value not in user_roles:
         raise AuthenticationException("Invalid credentials")
 
@@ -413,7 +414,7 @@ async def refresh_token(
         raise AuthenticationException("User not found or inactive")
 
     # Determine role
-    user_roles = [ur.role.name for ur in user.user_roles if not ur.role.is_deleted]
+    user_roles = [ur.role.name for ur in user.user_roles]
     if RoleEnum.ADMIN.value in user_roles:
         role = RoleEnum.ADMIN.value
     elif RoleEnum.PARENT.value in user_roles:

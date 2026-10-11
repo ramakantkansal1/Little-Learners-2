@@ -60,7 +60,7 @@ class UserRole(Base, IDMixin, TimestampMixin):
 
     # Relationships
     user: Mapped["User"] = relationship(back_populates="user_roles", foreign_keys=[user_id])
-    role: Mapped["Role"] = relationship(back_populates="user_roles")
+    role: Mapped["Role"] = relationship(back_populates="user_roles", lazy="selectin")
     assigned_by_user: Mapped[Optional["User"]] = relationship(foreign_keys=[assigned_by])
 
     # Constraints
