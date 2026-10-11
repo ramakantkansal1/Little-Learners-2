@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, User, Edit, Trash2, Loader2 } from 'lucide-react';
+import { Plus, User, Edit, Trash2, Loader2, Trophy } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -272,6 +272,13 @@ export default function ChildrenPage() {
                   className="btn btn-primary flex-1 justify-center"
                 >
                   View Progress
+                </Link>
+                <Link
+                  to={`/parent/children/${child.id}/rewards`}
+                  className="btn btn-secondary flex-1 justify-center"
+                >
+                  <Trophy className="w-5 h-5" />
+                  Rewards
                 </Link>
                 <button
                   onClick={() => openEditModal(child)}

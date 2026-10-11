@@ -94,7 +94,7 @@ class Settings(BaseSettings):
     TTS_VOICE_DEFAULT: str = "default"
 
     # Rate Limiting
-    RATE_LIMIT_LOGIN_ATTEMPTS: int = 100
+    RATE_LIMIT_LOGIN_ATTEMPTS: int = 5
     RATE_LIMIT_LOGIN_WINDOW_MINUTES: int = 15
     RATE_LIMIT_API_REQUESTS: int = 100
     RATE_LIMIT_API_WINDOW_MINUTES: int = 1

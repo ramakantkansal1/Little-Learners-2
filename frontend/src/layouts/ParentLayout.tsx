@@ -11,7 +11,6 @@ import {
   ChevronDown,
   User,
   BookOpen,
-  Trophy,
 } from 'lucide-react';
 
 export default function ParentLayout() {
@@ -24,8 +23,7 @@ export default function ParentLayout() {
   const navigation = [
     { name: 'Dashboard', href: '/parent/dashboard', icon: LayoutDashboard },
     { name: 'My Children', href: '/parent/children', icon: Users },
-    { name: 'Progress Reports', href: '/parent/children/1/progress', icon: BookOpen },
-    { name: 'Rewards & Achievements', href: '/student/rewards', icon: Trophy },
+    { name: 'Progress Reports', href: '/parent/children', icon: BookOpen },
     { name: 'Notifications', href: '/parent/notifications', icon: Bell },
     { name: 'Settings', href: '/parent/settings', icon: Settings },
   ];

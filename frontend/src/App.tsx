@@ -29,6 +29,7 @@ const ParentDashboardPage = lazy(() => import('./pages/parent/DashboardPage'));
 const ParentChildrenPage = lazy(() => import('./pages/parent/ChildrenPage'));
 const ChildProfilePage = lazy(() => import('./pages/parent/ChildProfilePage'));
 const ChildProgressPage = lazy(() => import('./pages/parent/ChildProgressPage'));
+const ChildRewardsPage = lazy(() => import('./pages/parent/ChildRewardsPage'));
 const ParentSettingsPage = lazy(() => import('./pages/parent/SettingsPage'));
 const ParentNotificationsPage = lazy(() => import('./pages/parent/NotificationsPage'));
 
@@ -93,6 +94,7 @@ function App() {
           <Route path="/parent/children" element={<ParentChildrenPage />} />
           <Route path="/parent/children/:childId" element={<ChildProfilePage />} />
           <Route path="/parent/children/:childId/progress" element={<ChildProgressPage />} />
+          <Route path="/parent/children/:childId/rewards" element={<ChildRewardsPage />} />
           <Route path="/parent/settings" element={<ParentSettingsPage />} />
           <Route path="/parent/notifications" element={<ParentNotificationsPage />} />
         </Route>

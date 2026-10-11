@@ -79,8 +79,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.requests: dict[str, list[float]] = {}
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # Skip rate limiting for health checks
-        if request.url.path.startswith("/api/v1/health"):
+        # Skip rate limiting for health checks and CSRF token endpoint
+        if request.url.path.startswith("/api/v1/health") or request.url.path == "/api/v1/auth/csrf-token":
             return await call_next(request)
 
         # Get client IP

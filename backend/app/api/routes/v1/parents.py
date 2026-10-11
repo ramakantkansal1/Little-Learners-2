@@ -87,6 +87,7 @@ class ChildProgressResponse(BaseModel):
     completed_activities: int
     total_time_spent_minutes: int
     average_score: Optional[float]
+    rewards_earned: int
     recent_activity: List[dict]
 
     class Config:
@@ -495,7 +496,7 @@ async def update_child(
     
     # Reload with stage
     stage = student.current_stage
-    progress = calculate_child_progress(student, db)
+    progress = await calculate_child_progress(student, db)
     
     return ChildResponse(
         id=student.id,
@@ -581,7 +582,7 @@ async def get_child_progress(
         raise NotFoundException("Child not found or cannot view progress")
     
     # Load student with stage
-    from app.models import StudentProfile, LearningStage, Lesson, StudentLessonProgress, ActivityAttempt, Activity, Subject, Topic
+    from app.models import StudentProfile, LearningStage, Lesson, StudentLessonProgress, ActivityAttempt, Activity, Subject, Topic, StudentRewardAward
     
     student_result = await db.execute(
         select(StudentProfile)
@@ -652,6 +653,13 @@ async def get_child_progress(
     )
     avg_score = score_result.scalar()
     
+    # Rewards earned
+    rewards_earned_result = await db.execute(
+        select(func.count(StudentRewardAward.id))
+        .where(StudentRewardAward.student_id == child_id)
+    )
+    rewards_earned = rewards_earned_result.scalar() or 0
+    
     # Recent activity
     recent_result = await db.execute(
         select(ActivityAttempt, Lesson, Activity)
@@ -687,5 +695,74 @@ async def get_child_progress(
         completed_activities=completed_activities,
         total_time_spent_minutes=total_time // 60,
         average_score=round(avg_score, 1) if avg_score else None,
+        rewards_earned=rewards_earned,
         recent_activity=recent_activity,
     )
+
+
+@router.get("/me/children/{child_id}/rewards")
+async def get_child_rewards(
+    child_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get all rewards with earned status for a specific child (parent view)."""
+    profile = await get_parent_profile(db, current_user.id)
+    
+    # Verify child belongs to this parent
+    rel_result = await db.execute(
+        select(ParentStudentRelationship)
+        .where(ParentStudentRelationship.parent_id == profile.id)
+        .where(ParentStudentRelationship.student_id == child_id)
+        .where(ParentStudentRelationship.can_view_progress == True)
+    )
+    relationship = rel_result.scalar_one_or_none()
+    if not relationship:
+        raise NotFoundException("Child not found or cannot view progress")
+    
+    # Load student
+    from app.models import StudentProfile, StudentReward, StudentRewardAward
+    
+    student_result = await db.execute(
+        select(StudentProfile)
+        .where(StudentProfile.id == child_id)
+        .options(selectinload(StudentProfile.current_stage))
+    )
+    student = student_result.scalar_one_or_none()
+    if not student or student.is_deleted:
+        raise NotFoundException("Child not found")
+    
+    # Get all rewards with earned status
+    rewards_result = await db.execute(
+        select(StudentReward)
+        .where(StudentReward.is_active == True)
+        .order_by(StudentReward.display_order)
+    )
+    rewards = rewards_result.scalars().all()
+    
+    result = []
+    for reward in rewards:
+        award_result = await db.execute(
+            select(StudentRewardAward)
+            .where(StudentRewardAward.student_id == student.id)
+            .where(StudentRewardAward.reward_id == reward.id)
+        )
+        award = award_result.scalar_one_or_none()
+        
+        result.append({
+            "id": reward.id,
+            "code": reward.code,
+            "name": reward.name,
+            "description": reward.description,
+            "reward_type": reward.reward_type,
+            "image_url": reward.image_url,
+            "points_value": reward.points_value,
+            "earned": award is not None,
+            "earned_at": award.earned_at.isoformat() if award else None,
+        })
+    
+    return {
+        "child_id": student.id,
+        "child_name": student.display_name,
+        "rewards": result,
+    }

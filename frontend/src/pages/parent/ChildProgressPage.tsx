@@ -1,63 +1,199 @@
-import { Link } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Trophy, TrendingUp, Clock, Target, Star, CheckCircle, AlertCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { ArrowLeft, BookOpen, Trophy, TrendingUp, Clock, Target, Star, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { parentApi, type ChildProgress } from '@services';
 
-const progressData = {
-  overview: {
-    lessonsCompleted: 24,
-    totalLessons: 48,
-    timeThisWeek: '3h 45m',
-    timeThisMonth: '14h 20m',
-    currentStreak: 5,
-    longestStreak: 12,
-    rewardsEarned: 28,
-  },
-  subjects: [
-    { name: 'English', progress: 75, lessonsDone: 12, totalLessons: 16, color: 'bg-red-500' },
-    { name: 'Hindi', progress: 60, lessonsDone: 9, totalLessons: 15, color: 'bg-orange-500' },
-    { name: 'Mathematics', progress: 80, lessonsDone: 14, totalLessons: 18, color: 'bg-blue-500' },
-    { name: 'EVS', progress: 55, lessonsDone: 8, totalLessons: 14, color: 'bg-green-500' },
-    { name: 'Art & Music', progress: 90, lessonsDone: 6, totalLessons: 7, color: 'bg-purple-500' },
-  ],
-  recentLessons: [
-    { name: 'Counting 1-20', subject: 'Mathematics', completed: '2 hours ago', score: 95, time: '12 min' },
-    { name: 'Letter Sounds A-Z', subject: 'English', completed: 'Yesterday', score: 88, time: '15 min' },
-    { name: 'Shapes & Patterns', subject: 'Mathematics', completed: '2 days ago', score: 100, time: '10 min' },
-    { name: 'My Family', subject: 'EVS', completed: '3 days ago', score: 92, time: '8 min' },
-    { name: 'Rhyming Words', subject: 'English', completed: '5 days ago', score: 85, time: '12 min' },
-  ],
-  strengths: [
-    'Number recognition 1-20',
-    'Shape identification',
-    'Color matching',
-    'Following audio instructions',
-  ],
-  needsPractice: [
-    'Hindi letter recognition',
-    'Counting backwards',
-    'Letter sound blending',
-    'Fine motor tracing',
-  ],
-  weeklyProgress: [
-    { day: 'Mon', lessons: 2, time: 25 },
-    { day: 'Tue', lessons: 1, time: 15 },
-    { day: 'Wed', lessons: 3, time: 40 },
-    { day: 'Thu', lessons: 0, time: 0 },
-    { day: 'Fri', lessons: 2, time: 30 },
-    { day: 'Sat', lessons: 1, time: 20 },
-    { day: 'Sun', lessons: 1, time: 15 },
-  ],
-};
+interface ChildProgressData extends ChildProgress {
+  child_id: number;
+  child_name: string;
+  stage_code: string;
+  stage_name: string;
+  total_lessons: number;
+  completed_lessons: number;
+  in_progress_lessons: number;
+  total_activities: number;
+  completed_activities: number;
+  total_time_spent_minutes: number;
+  average_score: number | null;
+  rewards_earned: number;
+  recent_activity: Array<{
+    lesson: string;
+    activity: string;
+    completed_at: string | null;
+    score: number | null;
+    time_spent: number;
+  }>;
+}
+
+interface SubjectProgress {
+  name: string;
+  progress: number;
+  lessonsDone: number;
+  totalLessons: number;
+  color: string;
+}
+
+interface RecentLesson {
+  name: string;
+  subject: string;
+  completed: string;
+  score: number;
+  time: string;
+}
+
+interface WeeklyProgressItem {
+  day: string;
+  lessons: number;
+  time: number;
+}
 
 export default function ChildProgressPage() {
+  const { childId } = useParams<{ childId: string }>();
+  const [progress, setProgress] = useState<ChildProgressData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (childId) {
+      parentApi.getChildProgress(parseInt(childId))
+        .then(response => {
+          setProgress(response.data);
+          setLoading(false);
+        })
+        .catch(err => {
+          setError('Failed to load progress data');
+          setLoading(false);
+          console.error('Progress load error:', err);
+        });
+    }
+  }, [childId]);
+
+  // Helper to format time
+  const formatTime = (minutes: number): string => {
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  };
+
+  // Helper to format recent activity time
+  const formatRecentTime = (seconds: number): string => {
+    if (seconds < 60) return `${seconds} sec`;
+    const mins = Math.floor(seconds / 60);
+    return mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
+  };
+
+  // Derive subject progress from recent activity (since we don't have subject-level API yet)
+  const getSubjectProgress = (): SubjectProgress[] => {
+    if (!progress) return [];
+    
+    // For now, return a placeholder structure that matches the UI
+    // In a real implementation, this would come from a subject-level progress API
+    return [
+      { name: 'English', progress: 0, lessonsDone: 0, totalLessons: 0, color: 'bg-red-500' },
+      { name: 'Hindi', progress: 0, lessonsDone: 0, totalLessons: 0, color: 'bg-orange-500' },
+      { name: 'Mathematics', progress: 0, lessonsDone: 0, totalLessons: 0, color: 'bg-blue-500' },
+      { name: 'EVS', progress: 0, lessonsDone: 0, totalLessons: 0, color: 'bg-green-500' },
+      { name: 'Art & Music', progress: 0, lessonsDone: 0, totalLessons: 0, color: 'bg-purple-500' },
+    ];
+  };
+
+  // Derive recent lessons from recent activity
+  const getRecentLessons = (): RecentLesson[] => {
+    if (!progress?.recent_activity) return [];
+    return progress.recent_activity.slice(0, 5).map(activity => ({
+      name: activity.lesson,
+      subject: 'General', // Would need subject mapping
+      completed: activity.completed_at ? new Date(activity.completed_at).toLocaleDateString() : 'Unknown',
+      score: activity.score || 0,
+      time: formatRecentTime(activity.time_spent),
+    }));
+  };
+
+  // Derive strengths and practice areas from recent activity scores
+  const getStrengths = (): string[] => {
+    if (!progress?.recent_activity) return [];
+    const highScores = progress.recent_activity
+      .filter(a => a.score !== null && a.score >= 90)
+      .map(a => a.lesson)
+      .slice(0, 4);
+    return highScores.length > 0 ? highScores : ['Consistent effort', 'Regular practice', 'Good participation', 'Following instructions'];
+  };
+
+  const getNeedsPractice = (): string[] => {
+    if (!progress?.recent_activity) return [];
+    const lowScores = progress.recent_activity
+      .filter(a => a.score !== null && a.score < 70)
+      .map(a => a.lesson)
+      .slice(0, 4);
+    return lowScores.length > 0 ? lowScores : ['Areas for improvement will appear here'];
+  };
+
+  // Weekly progress from recent activity
+  const getWeeklyProgress = (): WeeklyProgressItem[] => {
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    if (!progress?.recent_activity) {
+      return days.map(day => ({ day, lessons: 0, time: 0 }));
+    }
+    
+    // Group recent activity by day of week
+    const dayMap = new Map<string, { lessons: number; time: number }>();
+    days.forEach(day => dayMap.set(day, { lessons: 0, time: 0 }));
+    
+    progress.recent_activity.forEach(activity => {
+      if (activity.completed_at) {
+        const date = new Date(activity.completed_at);
+        const day = days[date.getDay()];
+        const current = dayMap.get(day) || { lessons: 0, time: 0 };
+        current.lessons += 1;
+        current.time += Math.floor((activity.time_spent || 0) / 60);
+        dayMap.set(day, current);
+      }
+    });
+    
+    return days.map(day => ({ day, ...dayMap.get(day)! }));
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-pastel-blue mb-4">
+            <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
+          </div>
+          <p className="text-gray-600">Loading progress...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !progress) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <p className="text-red-500 mb-4">{error || 'Progress data not found'}</p>
+          <Link to="/parent/children" className="btn btn-primary">
+            <ArrowLeft className="w-5 h-5" />
+            Back to Children
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const completionRate = progress.total_lessons > 0 
+    ? Math.round((progress.completed_lessons / progress.total_lessons) * 100) 
+    : 0;
+
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-4">
-        <a href="/parent/children" className="btn btn-ghost">
+        <Link to="/parent/children" className="btn btn-ghost">
           <ArrowLeft className="w-5 h-5" />
-        </a>
+        </Link>
         <div>
-          <h1 className="text-2xl font-display font-bold text-gray-900">Aarav's Progress</h1>
-          <p className="text-gray-600">Nursery • Age 4 • Overall: 68% complete</p>
+          <h1 className="text-2xl font-display font-bold text-gray-900">{progress.child_name}'s Progress</h1>
+          <p className="text-gray-600">{progress.stage_name} • Overall: {completionRate}% complete</p>
         </div>
       </div>
 
@@ -67,7 +203,7 @@ export default function ChildProgressPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">Lessons Completed</p>
-              <p className="text-3xl font-display font-bold text-gray-900">{progressData.overview.lessonsCompleted} / {progressData.overview.totalLessons}</p>
+              <p className="text-3xl font-display font-bold text-gray-900">{progress.completed_lessons} / {progress.total_lessons}</p>
             </div>
             <div className="w-12 h-12 rounded-xl bg-pastel-blue flex items-center justify-center">
               <BookOpen className="w-6 h-6 text-primary-500" />
@@ -78,7 +214,7 @@ export default function ChildProgressPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">Time This Week</p>
-              <p className="text-3xl font-display font-bold text-gray-900">{progressData.overview.timeThisWeek}</p>
+              <p className="text-3xl font-display font-bold text-gray-900">{formatTime(progress.total_time_spent_minutes)}</p>
             </div>
             <div className="w-12 h-12 rounded-xl bg-pastel-green flex items-center justify-center">
               <Clock className="w-6 h-6 text-primary-500" />
@@ -89,7 +225,7 @@ export default function ChildProgressPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">Current Streak</p>
-              <p className="text-3xl font-display font-bold text-gray-900">{progressData.overview.currentStreak} days</p>
+              <p className="text-3xl font-display font-bold text-gray-900">-- days</p>
             </div>
             <div className="w-12 h-12 rounded-xl bg-pastel-pink flex items-center justify-center">
               <TrendingUp className="w-6 h-6 text-primary-500" />
@@ -100,7 +236,7 @@ export default function ChildProgressPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">Rewards Earned</p>
-              <p className="text-3xl font-display font-bold text-gray-900">{progressData.overview.rewardsEarned}</p>
+              <p className="text-3xl font-display font-bold text-gray-900">{progress.rewards_earned}</p>
             </div>
             <div className="w-12 h-12 rounded-xl bg-pastel-yellow flex items-center justify-center">
               <Trophy className="w-6 h-6 text-primary-500" />
@@ -113,7 +249,7 @@ export default function ChildProgressPage() {
       <div className="card p-6">
         <h2 className="text-xl font-display font-bold text-gray-900 mb-6">Subject Progress</h2>
         <div className="space-y-4">
-          {progressData.subjects.map(subject => (
+          {getSubjectProgress().map(subject => (
             <div key={subject.name} className="group">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-3">
@@ -143,7 +279,7 @@ export default function ChildProgressPage() {
         <div className="card p-6">
           <h2 className="text-xl font-display font-bold text-gray-900 mb-6">Weekly Activity</h2>
           <div className="flex items-end justify-between h-48 gap-2">
-            {progressData.weeklyProgress.map((day, index) => (
+            {getWeeklyProgress().map((day, index) => (
               <div key={index} className="flex-1 flex flex-col items-center gap-2">
                 <div
                   className="w-full bg-pastel-blue rounded-t transition-all duration-300 hover:bg-primary-500"
@@ -154,13 +290,15 @@ export default function ChildProgressPage() {
               </div>
             ))}
           </div>
-          <p className="text-center text-sm text-gray-500 mt-4">This week: {progressData.weeklyProgress.reduce((a, b) => a + b.lessons, 0)} lessons • {progressData.weeklyProgress.reduce((a, b) => a + b.time, 0)} minutes</p>
+          <p className="text-center text-sm text-gray-500 mt-4">
+            This week: {getWeeklyProgress().reduce((a, b) => a + b.lessons, 0)} lessons • {getWeeklyProgress().reduce((a, b) => a + b.time, 0)} minutes
+          </p>
         </div>
 
         <div className="card p-6">
           <h2 className="text-xl font-display font-bold text-gray-900 mb-6">Recent Lessons</h2>
           <div className="space-y-3">
-            {progressData.recentLessons.map((lesson, index) => (
+            {getRecentLessons().map((lesson, index) => (
               <div key={index} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl group hover:bg-gray-100">
                 <div className="w-12 h-12 rounded-xl bg-pastel-blue flex items-center justify-center flex-shrink-0">
                   <BookOpen className="w-6 h-6 text-primary-500" />
@@ -190,7 +328,7 @@ export default function ChildProgressPage() {
             Strengths
           </h2>
           <ul className="space-y-3">
-            {progressData.strengths.map((strength, index) => (
+            {getStrengths().map((strength, index) => (
               <li key={index} className="flex items-center gap-3 p-3 bg-green-50 rounded-xl">
                 <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
                 <span className="text-gray-700">{strength}</span>
@@ -205,7 +343,7 @@ export default function ChildProgressPage() {
             Areas for Practice
           </h2>
           <ul className="space-y-3">
-            {progressData.needsPractice.map((area, index) => (
+            {getNeedsPractice().map((area, index) => (
               <li key={index} className="flex items-center gap-3 p-3 bg-orange-50 rounded-xl">
                 <AlertCircle className="w-5 h-5 text-orange-500 flex-shrink-0" />
                 <span className="text-gray-700">{area}</span>

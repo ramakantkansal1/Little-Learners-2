@@ -30,7 +30,7 @@ function getScoreColor(score: number | null): string {
 export default function DashboardPage() {
   const { user } = useAuth();
   const [children, setChildren] = useState<Child[]>([]);
-  const [progressData, setProgressData] = useState<Record<number, ChildProgress>>({});
+  const [progressData, setProgressData] = useState<Record<number, ChildProgress & { rewards_earned: number }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -157,7 +157,7 @@ export default function DashboardPage() {
             <div>
               <p className="text-sm text-gray-500">Rewards Earned</p>
               <p className="text-3xl font-display font-bold text-gray-900">
-                {Object.values(progressData).reduce((sum, p) => sum + (p.average_score ? 1 : 0), 0)} {/* placeholder */}
+                {Object.values(progressData).reduce((sum, p) => sum + (p.rewards_earned || 0), 0)}
               </p>
             </div>
             <div className="w-12 h-12 rounded-xl bg-pastel-yellow flex items-center justify-center">
@@ -255,12 +255,12 @@ export default function DashboardPage() {
               <p className="text-sm text-gray-600">Detailed reports</p>
             </Link>
           )}
-          <Link to="/student/rewards" className="card p-6 text-center group">
+          <Link to="/parent/children" className="card p-6 text-center group">
             <div className="w-12 h-12 rounded-xl bg-pastel-pink flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
               <Trophy className="w-6 h-6 text-primary-500" />
             </div>
             <h3 className="font-semibold text-gray-900 mb-1">Rewards</h3>
-            <p className="text-sm text-gray-600">Stars & badges earned</p>
+            <p className="text-sm text-gray-600">View children's achievements</p>
           </Link>
           <Link to="/parent/settings" className="card p-6 text-center group">
             <div className="w-12 h-12 rounded-xl bg-pastel-yellow flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">

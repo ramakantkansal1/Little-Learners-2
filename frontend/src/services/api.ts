@@ -334,6 +334,9 @@ export const parentApi = {
   
   getChildProgress: (childId: number) => 
     api.get(`/parents/me/children/${childId}/progress`),
+  
+  getChildRewards: (childId: number) => 
+    api.get(`/parents/me/children/${childId}/rewards`),
 };
 
 // ===========================================
