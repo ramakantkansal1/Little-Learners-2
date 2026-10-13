@@ -38,11 +38,12 @@ export default function StudentLoginPage() {
       setAuth(result.user, result.access_token, result.refresh_token);
       navigate('/student/dashboard', { replace: true });
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else if (err && typeof err === 'object' && 'response' in err) {
+      // Check for axios error first (has response property)
+      if (err && typeof err === 'object' && 'response' in err) {
         const axiosError = err as { response?: { data?: { error?: { message?: string } } } };
         setError(axiosError.response?.data?.error?.message || 'Login failed');
+      } else if (err instanceof Error) {
+        setError(err.message);
       } else {
         setError('Login failed. Please try again.');
       }

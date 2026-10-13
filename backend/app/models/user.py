@@ -91,7 +91,11 @@ class RefreshToken(Base, IDMixin, TimestampMixin):
         return self.revoked_at is not None
 
     def is_expired(self) -> bool:
-        return datetime.now(timezone.utc) > self.expires_at
+        now = datetime.now(timezone.utc)
+        expires_at = self.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        return now > expires_at
 
     def __repr__(self) -> str:
         return f"<RefreshToken(user_id={self.user_id}, jti={self.jti[:8]}...)>"
@@ -114,7 +118,11 @@ class PasswordReset(Base, IDMixin, TimestampMixin):
         return self.used_at is not None
 
     def is_expired(self) -> bool:
-        return datetime.now(timezone.utc) > self.expires_at
+        now = datetime.now(timezone.utc)
+        expires_at = self.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        return now > expires_at
 
     def __repr__(self) -> str:
         return f"<PasswordReset(user_id={self.user_id})>"

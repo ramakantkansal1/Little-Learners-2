@@ -663,6 +663,123 @@ async def start_activity_attempt(
     )
 
 
+@router.get("/me/attempts/{attempt_id}", response_model=AttemptStartResponse)
+async def get_activity_attempt(
+    attempt_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get existing activity attempt details."""
+    student = await get_student_profile(db, current_user.id)
+    
+    from app.models import Activity, ActivityTranslation, Question, AnswerOption, ActivityAttempt, StudentLessonProgress
+    
+    # Verify attempt belongs to student
+    attempt_result = await db.execute(
+        select(ActivityAttempt)
+        .where(ActivityAttempt.id == attempt_id)
+        .where(ActivityAttempt.student_id == student.id)
+    )
+    attempt = attempt_result.scalar_one_or_none()
+    if not attempt:
+        raise NotFoundException("Attempt not found")
+    
+    # Get activity
+    activity_result = await db.execute(
+        select(Activity)
+        .where(Activity.id == attempt.activity_id)
+        .where(Activity.status == "published")
+        .where(Activity.is_active == True)
+    )
+    activity = activity_result.scalar_one_or_none()
+    if not activity:
+        raise NotFoundException("Activity not found")
+    
+    # Get lesson progress
+    progress_result = await db.execute(
+        select(StudentLessonProgress)
+        .where(StudentLessonProgress.student_id == student.id)
+        .where(StudentLessonProgress.lesson_id == activity.lesson_id)
+    )
+    progress = progress_result.scalar_one_or_none()
+    if not progress:
+        progress = StudentLessonProgress(
+            student_id=student.id,
+            lesson_id=activity.lesson_id,
+            status="in_progress",
+            started_at=datetime.now(timezone.utc),
+        )
+        db.add(progress)
+        await db.flush()
+    elif progress.status == "not_started":
+        progress.status = "in_progress"
+        progress.started_at = datetime.now(timezone.utc)
+    
+    # Get activity details with translations
+    act_trans_result = await db.execute(
+        select(ActivityTranslation).where(
+            ActivityTranslation.activity_id == activity.id,
+            ActivityTranslation.language == student.preferred_language
+        )
+    )
+    act_trans = act_trans_result.scalar_one_or_none()
+    
+    # Get questions
+    questions_result = await db.execute(
+        select(Question)
+        .where(Question.activity_id == activity.id)
+        .where(Question.is_active == True)
+        .order_by(Question.display_order)
+    )
+    questions = questions_result.scalars().all()
+    
+    questions_data = []
+    for q in questions:
+        options_result = await db.execute(
+            select(AnswerOption)
+            .where(AnswerOption.question_id == q.id)
+            .order_by(AnswerOption.display_order)
+        )
+        options = options_result.scalars().all()
+        
+        questions_data.append({
+            "id": q.id,
+            "question_type": q.question_type,
+            "prompt": q.prompt,
+            "prompt_audio_url": q.prompt_audio_url,
+            "display_order": q.display_order,
+            "points": q.points,
+            "configuration": q.configuration,
+            "options": [
+                {
+                    "id": opt.id,
+                    "text": opt.text,
+                    "text_audio_url": opt.text_audio_url,
+                    "image_url": opt.image_url,
+                    "display_order": opt.display_order,
+                }
+                for opt in options
+            ],
+        })
+    
+    activity_detail = ActivityDetailResponse(
+        id=activity.id,
+        code=activity.code,
+        type=activity.type.value,
+        title=act_trans.title if act_trans else activity.code,
+        instructions=act_trans.instructions if act_trans else activity.instructions,
+        estimated_duration_minutes=activity.estimated_duration_minutes,
+        configuration=activity.configuration,
+        questions=questions_data,
+    )
+    
+    return AttemptStartResponse(
+        attempt_id=attempt.id,
+        activity=activity_detail,
+        questions=questions_data,
+    )
+
+
 @router.post("/attempts/{attempt_id}/responses")
 async def submit_answer(
     attempt_id: int,

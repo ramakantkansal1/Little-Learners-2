@@ -17,6 +17,7 @@ export default defineConfig({
       '@types': path.resolve(__dirname, './src/types'),
       '@utils': path.resolve(__dirname, './src/utils'),
       '@assets': path.resolve(__dirname, './src/assets'),
+      '@context': path.resolve(__dirname, './src/context'),
     },
   },
   server: {
@@ -27,6 +28,7 @@ export default defineConfig({
         target: 'http://backend:8000',
         changeOrigin: true,
         secure: false,
+        cookieDomainRewrite: 'localhost',
       },
     },
   },

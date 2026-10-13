@@ -101,33 +101,56 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return {}
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # Skip rate limiting for health checks and CSRF token endpoint
-        if request.url.path.startswith("/api/v1/health") or request.url.path == "/api/v1/auth/csrf-token":
+        # Skip rate limiting for health checks, CSRF token endpoint, and OPTIONS preflight requests
+        if (
+            request.url.path.startswith("/api/v1/health") 
+            or request.url.path == "/api/v1/auth/csrf-token"
+            or request.method == "OPTIONS"
+        ):
             return await call_next(request)
 
         # Get client key (X-Client-ID header or IP)
         client_key = self._get_client_key(request)
         current_time = time.time()
 
-        # Determine rate limit based on path
-        if request.url.path.startswith("/api/v1/auth/"):
-            max_requests = settings.RATE_LIMIT_LOGIN_ATTEMPTS
+        # Determine rate limit based on path and environment
+        # Use more permissive limits in development for easier testing
+        is_development = settings.APP_ENV == "development"
+        
+        # Separate rate limits for different auth endpoints
+        # Use different counter keys for different path types to avoid cross-contamination
+        if request.url.path == "/api/v1/auth/student/login" or request.url.path == "/api/v1/auth/parent/login":
+            # Strict limit for actual login attempts
+            if is_development:
+                max_requests = settings.RATE_LIMIT_LOGIN_ATTEMPTS * 4  # 20 per 15 min in dev
+            else:
+                max_requests = settings.RATE_LIMIT_LOGIN_ATTEMPTS
             window_seconds = settings.RATE_LIMIT_LOGIN_WINDOW_MINUTES * 60
+            counter_key = f"{client_key}:login"
+        elif request.url.path.startswith("/api/v1/auth/"):
+            # Higher limit for auth checks (GET /auth/me, POST /auth/refresh, etc.)
+            if is_development:
+                max_requests = settings.RATE_LIMIT_LOGIN_ATTEMPTS * 20  # 100 per 15 min in dev
+            else:
+                max_requests = settings.RATE_LIMIT_LOGIN_ATTEMPTS * 5  # 25 per 15 min in prod
+            window_seconds = settings.RATE_LIMIT_LOGIN_WINDOW_MINUTES * 60
+            counter_key = f"{client_key}:auth"
         else:
             max_requests = settings.RATE_LIMIT_API_REQUESTS
             window_seconds = settings.RATE_LIMIT_API_WINDOW_MINUTES * 60
+            counter_key = f"{client_key}:api"
 
         # Clean old requests
-        if client_key in self.requests:
-            self.requests[client_key] = [
-                req_time for req_time in self.requests[client_key]
+        if counter_key in self.requests:
+            self.requests[counter_key] = [
+                req_time for req_time in self.requests[counter_key]
                 if current_time - req_time < window_seconds
             ]
         else:
-            self.requests[client_key] = []
+            self.requests[counter_key] = []
 
         # Check rate limit
-        if len(self.requests[client_key]) >= max_requests:
+        if len(self.requests[counter_key]) >= max_requests:
             logger.warning(
                 "Rate limit exceeded",
                 client_key=client_key,
@@ -152,7 +175,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             )
 
         # Record request
-        self.requests[client_key].append(current_time)
+        self.requests[counter_key].append(current_time)
 
         return await call_next(request)
 
@@ -169,6 +192,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         "/api/v1/auth/parent/register",
         "/api/v1/auth/student/login",
         "/api/v1/auth/refresh",
+        "/api/v1/auth/logout",
         "/api/v1/auth/forgot-password",
         "/api/v1/auth/reset-password",
         "/api/v1/health",
@@ -196,7 +220,13 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         # Get expected CSRF token from session/cookie
         expected_token = request.cookies.get("csrf_token")
 
+        # Debug logging
+        import structlog
+        logger = structlog.get_logger(__name__)
+        print(f"CSRF validation: path={request.url.path}, method={request.method}, has_header_token={bool(csrf_token)}, has_cookie_token={bool(expected_token)}, header_token={csrf_token[:10] if csrf_token else None}, cookie_token={expected_token[:10] if expected_token else None}, header_full={csrf_token}, cookie_full={expected_token}, tokens_match={csrf_token == expected_token if csrf_token and expected_token else None}")
+
         if not csrf_token or not expected_token or not verify_csrf_token(csrf_token, expected_token):
+            print(f"CSRF validation FAILED: path={request.url.path}, method={request.method}, csrf_token={csrf_token}, expected_token={expected_token}, match={csrf_token == expected_token if csrf_token and expected_token else None}")
             logger.warning(
                 "CSRF token validation failed",
                 path=request.url.path,

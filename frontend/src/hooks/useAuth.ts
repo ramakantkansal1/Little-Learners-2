@@ -52,14 +52,22 @@ export const useAuth = create<AuthState>()(
         });
       },
 
-      logout: () => {
-        set({
-          user: null,
-          accessToken: null,
-          refreshToken: null,
-          isAuthenticated: false,
-          isLoading: false,
-        });
+      logout: async () => {
+        try {
+          // Call backend logout endpoint to revoke tokens and clear cookies
+          await api.post('/auth/logout');
+        } catch (error) {
+          console.error('Logout API call failed:', error);
+        } finally {
+          // Always clear local state
+          set({
+            user: null,
+            accessToken: null,
+            refreshToken: null,
+            isAuthenticated: false,
+            isLoading: false,
+          });
+        }
       },
 
       setLoading: (loading) => set({ isLoading: loading }),
@@ -93,7 +101,8 @@ export const useAuth = create<AuthState>()(
         if (!refreshToken) return false;
 
         try {
-          const response = await api.post('/auth/refresh', { refresh_token: refreshToken });
+          // Backend reads refresh token from cookie (withCredentials: true sends cookies automatically)
+          const response = await api.post('/auth/refresh');
           const { access_token, refresh_token, user } = response.data;
           set({
             user,

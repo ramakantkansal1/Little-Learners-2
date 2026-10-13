@@ -346,24 +346,33 @@ class TestAuthEndpoints:
 
     @pytest.mark.asyncio
     async def test_student_login_rate_limiting(self, client: AsyncClient):
-        """Test student login rate limiting (5 attempts per 15 min)."""
+        """Test student login rate limiting."""
         # Note: This test may be flaky in CI due to shared rate limiter
         # We just verify the rate limit response structure
+        from app.core.config import settings
+        
         csrf_response = await client.get("/api/v1/auth/csrf-token")
         csrf_token = csrf_response.json()["csrf_token"]
         
-        # Make multiple failed attempts
-        for i in range(6):
+        # Determine expected limit based on environment
+        # In development, limit is 4x the base limit
+        if settings.APP_ENV == "development":
+            expected_limit = settings.RATE_LIMIT_LOGIN_ATTEMPTS * 4
+        else:
+            expected_limit = settings.RATE_LIMIT_LOGIN_ATTEMPTS
+        
+        # Make requests up to and including the rate limited one
+        for i in range(expected_limit + 1):
             response = await client.post(
                 "/api/v1/auth/student/login",
                 json={
-                    "username": "RateLimitTest",
+                    "username": f"RateLimitTest{i}",
                     "pin": "wrong",
                 },
                 headers={"X-CSRF-Token": csrf_token},
             )
         
-        # The 6th request should be rate limited
+        # The (limit+1)th request should be rate limited
         assert response.status_code == 429
         data = response.json()
         assert "error" in data

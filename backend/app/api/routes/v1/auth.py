@@ -134,31 +134,58 @@ async def assign_role(db: AsyncSession, user_id: int, role_name: RoleEnum, assig
         db.add(user_role)
 
 
+def _get_cookie_settings(remember_me: bool = False) -> dict:
+    """Get cookie settings based on environment."""
+    is_production = settings.APP_ENV == "production"
+    refresh_max_age = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+    if remember_me:
+        refresh_max_age = 30 * 24 * 60 * 60  # 30 days for remember me
+
+    # For production: SameSite=None requires Secure=True (HTTPS)
+    # For development (localhost): use lax with secure=False (works without Secure requirement)
+    # Don't set domain for localhost - let browser handle it
+    if is_production:
+        return {
+            "secure": True,
+            "samesite": "none",
+            "domain": None,
+            "max_age": refresh_max_age,
+        }
+    else:
+        return {
+            "secure": False,
+            "samesite": "lax",
+            "domain": None,  # Don't set domain for localhost
+            "max_age": refresh_max_age,
+        }
+
+
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str, remember_me: bool = False):
     """Set authentication cookies."""
+    cookie_settings = _get_cookie_settings(remember_me)
+    access_max_age = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+
     # Access token cookie
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=settings.APP_ENV == "production",
-        samesite="strict",
-        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        secure=cookie_settings["secure"],
+        samesite=cookie_settings["samesite"],
+        domain=cookie_settings["domain"],
+        max_age=access_max_age,
         path="/",
     )
 
     # Refresh token cookie
-    refresh_max_age = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
-    if remember_me:
-        refresh_max_age = 30 * 24 * 60 * 60  # 30 days for remember me
-
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=settings.APP_ENV == "production",
-        samesite="strict",
-        max_age=refresh_max_age,
+        secure=cookie_settings["secure"],
+        samesite=cookie_settings["samesite"],
+        domain=cookie_settings["domain"],
+        max_age=cookie_settings["max_age"],
         path="/",
     )
 
@@ -168,9 +195,10 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str, 
         key="csrf_token",
         value=csrf_token,
         httponly=False,  # Allow JavaScript to read the CSRF token
-        secure=settings.APP_ENV == "production",
-        samesite="strict",
-        max_age=refresh_max_age,
+        secure=cookie_settings["secure"],
+        samesite=cookie_settings["samesite"],
+        domain=cookie_settings["domain"],
+        max_age=cookie_settings["max_age"],
         path="/",
     )
 
@@ -179,8 +207,17 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str, 
 
 def clear_auth_cookies(response: Response):
     """Clear authentication cookies."""
+    is_production = settings.APP_ENV == "production"
+    if is_production:
+        cookie_secure = True
+        cookie_samesite = "none"
+        cookie_domain = None
+    else:
+        cookie_secure = False
+        cookie_samesite = "lax"
+        cookie_domain = None
     for cookie_name in ["access_token", "refresh_token", "csrf_token"]:
-        response.delete_cookie(key=cookie_name, path="/", secure=settings.APP_ENV == "production", samesite="strict")
+        response.delete_cookie(key=cookie_name, path="/", secure=cookie_secure, samesite=cookie_samesite, domain=cookie_domain)
 
 
 # Endpoints
@@ -557,12 +594,25 @@ async def reset_password(
 async def get_csrf_token(response: Response):
     """Get CSRF token for form submissions."""
     csrf_token = create_csrf_token()
+    is_production = settings.APP_ENV == "production"
+    # For production: SameSite=None requires Secure=True (HTTPS)
+    # For development (localhost): use lax with secure=False (works without Secure requirement)
+    if is_production:
+        cookie_secure = True
+        cookie_samesite = "none"
+        cookie_domain = None  # Let browser set domain
+    else:
+        cookie_secure = False
+        cookie_samesite = "lax"
+        cookie_domain = None  # Don't set domain for localhost
+    
     response.set_cookie(
         key="csrf_token",
         value=csrf_token,
         httponly=True,
-        secure=settings.APP_ENV == "production",
-        samesite="strict",
+        secure=cookie_secure,
+        samesite=cookie_samesite,
+        domain=cookie_domain,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         path="/",
     )
@@ -574,7 +624,7 @@ async def get_current_user_info(
     current_user: User = Depends(get_current_user),
 ):
     """Get current user information."""
-    user_roles = [ur.role.name for ur in current_user.user_roles if not ur.role.is_deleted]
+    user_roles = [ur.role.name for ur in current_user.user_roles]
     role = RoleEnum.ADMIN.value if RoleEnum.ADMIN.value in user_roles else (
         RoleEnum.PARENT.value if RoleEnum.PARENT.value in user_roles else RoleEnum.STUDENT.value
     )

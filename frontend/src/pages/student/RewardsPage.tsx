@@ -1,18 +1,6 @@
-import { Star, Award, Medal, Sparkles, Lock } from 'lucide-react';
-import { useState } from 'react';
-
-const allRewards = [
-  { id: 1, name: 'First Star', description: 'Earned your first star!', type: 'star', earned: true, earnedAt: '2024-01-15', points: 1 },
-  { id: 2, name: 'Five Stars', description: 'Collected 5 stars!', type: 'star', earned: true, earnedAt: '2024-01-20', points: 5 },
-  { id: 3, name: 'Ten Stars', description: 'Collected 10 stars!', type: 'star', earned: false, earnedAt: null, points: 10 },
-  { id: 4, name: 'First Lesson', description: 'Completed your first lesson!', type: 'badge', earned: true, earnedAt: '2024-01-10', points: 10 },
-  { id: 5, name: 'Five Lessons', description: 'Completed 5 lessons!', type: 'badge', earned: true, earnedAt: '2024-01-18', points: 25 },
-  { id: 6, name: 'Perfect Score', description: 'Got 100% on an activity!', type: 'sticker', earned: true, earnedAt: '2024-01-16', points: 5 },
-  { id: 7, name: 'Week Streak', description: 'Learned 7 days in a row!', type: 'badge', earned: false, earnedAt: null, points: 50 },
-  { id: 8, name: 'Animal Friend', description: 'Met all the animal friends!', type: 'sticker', earned: false, earnedAt: null, points: 15 },
-  { id: 9, name: 'Color Master', description: 'Learned all the colors!', type: 'badge', earned: false, earnedAt: null, points: 20 },
-  { id: 10, name: 'Shape Explorer', description: 'Found all the shapes!', type: 'badge', earned: false, earnedAt: null, points: 20 },
-];
+import { Star, Award, Medal, Sparkles, Lock, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { studentApi, type Reward } from '@services/api';
 
 const typeIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   star: Star,
@@ -27,16 +15,70 @@ const TypeIcon = ({ type, className }: { type: string; className?: string }) => 
 };
 
 export default function RewardsPage() {
+  const [rewards, setRewards] = useState<Reward[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'earned' | 'locked'>('all');
 
-  const filteredRewards = allRewards.filter(r => {
+  useEffect(() => {
+    const loadRewards = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await studentApi.getRewards();
+        setRewards(response.data);
+      } catch (err) {
+        console.error('Failed to load rewards:', err);
+        setError('Failed to load rewards. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadRewards();
+  }, []);
+
+  const filteredRewards = rewards.filter(r => {
     if (filter === 'earned') return r.earned;
     if (filter === 'locked') return !r.earned;
     return true;
   });
 
-  const earnedCount = allRewards.filter(r => r.earned).length;
-  const totalPoints = allRewards.filter(r => r.earned).reduce((sum, r) => sum + r.points, 0);
+  const earnedCount = rewards.filter(r => r.earned).length;
+  const totalPoints = rewards.filter(r => r.earned).reduce((sum, r) => sum + (r.points_value || 0), 0);
+  const earnedBadges = rewards.filter(r => r.earned && r.reward_type === 'badge').length;
+  const earnedStickers = rewards.filter(r => r.earned && r.reward_type === 'sticker').length;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-pastel-blue mb-4">
+            <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
+          </div>
+          <p className="text-gray-600">Loading your rewards...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="w-16 h-16 rounded-2xl bg-red-100 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-display font-bold text-gray-900 mb-2">Unable to load rewards</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button onClick={() => window.location.reload()} className="btn btn-primary">
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -66,14 +108,14 @@ export default function RewardsPage() {
           <div className="w-14 h-14 rounded-xl bg-pastel-blue flex items-center justify-center mx-auto mb-3">
             <Award className="w-7 h-7 text-primary-500" />
           </div>
-          <p className="text-2xl font-display font-bold text-gray-900">{allRewards.filter(r => r.type === 'badge' && r.earned).length}</p>
+          <p className="text-2xl font-display font-bold text-gray-900">{earnedBadges}</p>
           <p className="text-sm text-gray-500">Badges</p>
         </div>
         <div className="card p-5 text-center">
           <div className="w-14 h-14 rounded-xl bg-pastel-green flex items-center justify-center mx-auto mb-3">
             <Medal className="w-7 h-7 text-primary-500" />
           </div>
-          <p className="text-2xl font-display font-bold text-gray-900">{allRewards.filter(r => r.type === 'sticker' && r.earned).length}</p>
+          <p className="text-2xl font-display font-bold text-gray-900">{earnedStickers}</p>
           <p className="text-sm text-gray-500">Stickers</p>
         </div>
       </div>
@@ -90,7 +132,7 @@ export default function RewardsPage() {
                 : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
-            {f.charAt(0).toUpperCase() + f.slice(1)} ({allRewards.filter(r => filter === 'all' || r.earned === (f === 'earned')).length})
+            {f.charAt(0).toUpperCase() + f.slice(1)} ({filteredRewards.length})
           </button>
         ))}
       </div>
@@ -112,7 +154,7 @@ export default function RewardsPage() {
                 ? 'bg-gradient-to-br from-yellow-400 to-orange-500'
                 : 'bg-gray-200'
             }`}>
-              <TypeIcon type={reward.type} className={`w-10 h-10 ${reward.earned ? 'text-white' : 'text-gray-400'}`} />
+              <TypeIcon type={reward.reward_type} className={`w-10 h-10 ${reward.earned ? 'text-white' : 'text-gray-400'}`} />
               {!reward.earned && (
                 <Lock className="absolute top-2 right-2 w-4 h-4 text-gray-400" />
               )}
@@ -120,14 +162,14 @@ export default function RewardsPage() {
             <h3 className="font-semibold text-gray-900 mb-1">{reward.name}</h3>
             <p className="text-sm text-gray-500 mb-3">{reward.description}</p>
             <div className="flex items-center justify-center gap-2 text-xs">
-              <TypeIcon type={reward.type} className={`w-4 h-4 ${reward.earned ? 'text-yellow-500' : 'text-gray-400'}`} />
+              <TypeIcon type={reward.reward_type} className={`w-4 h-4 ${reward.earned ? 'text-yellow-500' : 'text-gray-400'}`} />
               <span className={`font-medium ${reward.earned ? 'text-yellow-600' : 'text-gray-400'}`}>
-                {reward.points} pts
+                {reward.points_value || 0} pts
               </span>
             </div>
-            {reward.earned && reward.earnedAt && (
+            {reward.earned && reward.earned_at && (
               <div className="mt-3 pt-3 border-t border-gray-100">
-                <p className="text-xs text-gray-500">Earned {new Date(reward.earnedAt).toLocaleDateString()}</p>
+                <p className="text-xs text-gray-500">Earned {new Date(reward.earned_at).toLocaleDateString()}</p>
               </div>
             )}
             {!reward.earned && (
@@ -151,7 +193,7 @@ export default function RewardsPage() {
           <p className="text-gray-600">
             {filter === 'earned'
               ? 'Complete activities and lessons to earn your first reward!'
-              : 'You\'ve earned all available rewards. Amazing!'}
+              : "You've earned all available rewards. Amazing!"}
           </p>
         </div>
       )}

@@ -25,26 +25,26 @@ export const api = axios.create({
   withCredentials: true,
 });
 
-// Helper to get CSRF token from cookie
-function getCsrfToken(): string | null {
-  const cookies = document.cookie.split(';');
-  for (const cookie of cookies) {
-    const [name, value] = cookie.trim().split('=');
-    if (name === 'csrf_token') {
-      return value;
-    }
+// CSRF token management - fetch from endpoint instead of cookie since cookies are on different port
+let csrfToken: string | null = null;
+
+async function ensureCsrfToken(): Promise<string | null> {
+  if (csrfToken) return csrfToken;
+  
+  try {
+    const response = await api.get<{ csrf_token: string }>('/auth/csrf-token');
+    csrfToken = response.data.csrf_token;
+    return csrfToken;
+  } catch (err) {
+    console.error('Failed to fetch CSRF token:', err);
+    return null;
   }
-  return null;
 }
 
-// Request interceptor to add auth token, CSRF token, and client ID
+// Request interceptor to add CSRF token and client ID
+// Note: Backend uses cookies for authentication (withCredentials: true), so we don't send Authorization header
 api.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const { accessToken } = useAuth.getState();
-    if (accessToken && config.headers) {
-      config.headers.Authorization = `Bearer ${accessToken}`;
-    }
-    
+  async (config: InternalAxiosRequestConfig) => {
     // Add client ID for rate limiting (helps in Docker environments)
     const clientId = getClientId();
     if (clientId && config.headers) {
@@ -54,9 +54,9 @@ api.interceptors.request.use(
     // Add CSRF token for state-changing methods
     const csrfMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
     if (config.method && csrfMethods.includes(config.method.toUpperCase())) {
-      const csrfToken = getCsrfToken();
-      if (csrfToken && config.headers) {
-        config.headers['X-CSRF-Token'] = csrfToken;
+      const token = await ensureCsrfToken();
+      if (token && config.headers) {
+        config.headers['X-CSRF-Token'] = token;
       }
     }
     
@@ -65,29 +65,84 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Track if a token refresh is already in progress to prevent multiple simultaneous refreshes
+let isRefreshing = false;
+let refreshSubscribers: Array<() => void> = [];
+
+function subscribeTokenRefresh(cb: () => void) {
+  refreshSubscribers.push(cb);
+}
+
+function onTokenRefreshed() {
+  refreshSubscribers.forEach(cb => cb());
+  refreshSubscribers = [];
+}
+
 // Response interceptor for token refresh
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
+    const status = error.response?.status;
+    const requestUrl = originalRequest.url || '';
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Do not retry on 403 (forbidden) or 429 (rate limited) - these are not auth issues
+    if (status === 403 || status === 429) {
+      // Clear CSRF token on 403/429 as it may be invalid
+      if (status === 403) {
+        csrfToken = null;
+      }
+      return Promise.reject(error);
+    }
+
+    // Skip token refresh for login endpoints - they should return 401 for invalid credentials
+    const isLoginEndpoint = requestUrl.includes('/auth/') && 
+      (requestUrl.includes('/student/login') || requestUrl.includes('/parent/login') || requestUrl.includes('/parent/register'));
+
+    // Handle 401 Unauthorized with token refresh (skip for login endpoints)
+    if (status === 401 && !originalRequest._retry && !isLoginEndpoint) {
       originalRequest._retry = true;
+
+      // If already refreshing, wait for the refresh to complete
+      if (isRefreshing) {
+        try {
+          await new Promise<void>((resolve) => {
+            subscribeTokenRefresh(resolve);
+          });
+          // Retry with new token (cookies are automatically sent with withCredentials)
+          return api(originalRequest);
+        } catch (refreshError) {
+          return Promise.reject(refreshError);
+        }
+      }
+
+      // Start refresh process
+      isRefreshing = true;
 
       try {
         const { refreshAccessToken } = useAuth.getState();
         const success = await refreshAccessToken();
 
         if (success) {
-          const { accessToken } = useAuth.getState();
-          if (originalRequest.headers && accessToken) {
-            originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-          }
+          onTokenRefreshed();
+          // Backend uses cookies, so just retry the request
           return api(originalRequest);
+        } else {
+          onTokenRefreshed();
+          useAuth.getState().clearAuth();
+          if (typeof window !== 'undefined') {
+            window.location.href = '/auth/parent/login';
+          }
         }
       } catch (refreshError) {
+        onTokenRefreshed();
         useAuth.getState().clearAuth();
-        window.location.href = '/auth/parent/login';
+        if (typeof window !== 'undefined') {
+          window.location.href = '/auth/parent/login';
+        }
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
 
@@ -182,17 +237,10 @@ export interface Lesson {
   id: number;
   topic_id: number;
   code: string;
-  status: string;
-  version: number;
+  name: string;
+  description: string | null;
   estimated_duration_minutes: number | null;
-  thumbnail_url: string | null;
-  instructions: string | null;
-  display_order: number;
-  published_at: string | null;
   is_active: boolean;
-  title?: string;
-  description?: string;
-  translated_instructions?: string;
 }
 
 export interface Activity {
@@ -450,8 +498,30 @@ export interface ActivityDetail {
       text_audio_url: string | null;
       image_url: string | null;
       display_order: number;
+      correct_option_id?: number;
     }>;
   }>;
+}
+
+export interface QuestionContent {
+  id: number;
+  question_type: string;
+  prompt: string;
+  prompt_audio_url: string | null;
+  display_order: number;
+  points: number;
+  configuration: Record<string, unknown> | null;
+  options: OptionContent[];
+}
+
+export interface OptionContent {
+  id: number;
+  text: string;
+  text_audio_url: string | null;
+  image_url: string | null;
+  display_order: number;
+  is_correct?: boolean;
+  correct_option_id?: number;
 }
 
 export interface AttemptStartResponse {
@@ -531,6 +601,9 @@ export const studentApi = {
   
   startActivityAttempt: (activityId: number) => 
     api.post<AttemptStartResponse>(`/students/me/activities/${activityId}/attempts`),
+  
+  getActivityAttempt: (attemptId: number) => 
+    api.get<AttemptStartResponse>(`/students/me/attempts/${attemptId}`),
   
   submitAnswer: (attemptId: number, questionId: number, selectedOptionIds: number[]) => 
     api.post<AnswerSubmitResponse>(`/attempts/${attemptId}/responses`, { 
@@ -787,6 +860,12 @@ export const adminApi = {
     offset?: number; 
   }) => 
     api.get(`/admin/audit-logs`, { params }),
+  
+  getSettings: () => 
+    api.get('/admin/settings'),
+  
+  updateSettings: (data: Record<string, unknown>) => 
+    api.patch('/admin/settings', data),
 };
 
 // ===========================================
@@ -807,13 +886,13 @@ export interface MediaAsset {
   alt_text: string | null;
   caption: string | null;
   source: string | null;
-  license: string | null;
-  attribution: string | null;
-  language: string | null;
-  tags: string[] | null;
-  is_processed: boolean;
-  processing_error: string | null;
-  created_at: string;
+  license: string | null,
+  attribution: string | null,
+  language: string | null,
+  tags: string[] | null,
+  is_processed: boolean,
+  processing_error: string | null,
+  created_at: string,
 }
 
 export const mediaApi = {

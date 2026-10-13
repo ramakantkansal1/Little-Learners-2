@@ -8,6 +8,9 @@ import ParentLayout from './layouts/ParentLayout';
 import StudentLayout from './layouts/StudentLayout';
 import AdminLayout from './layouts/AdminLayout';
 
+// Context
+import { StudentProvider } from './context/StudentContext';
+
 // Pages - Public
 const LandingPage = lazy(() => import('./pages/public/LandingPage'));
 const AboutPage = lazy(() => import('./pages/public/AboutPage'));
@@ -100,7 +103,7 @@ function App() {
         </Route>
 
         {/* Student Routes - Protected */}
-        <Route element={<StudentLayout />}>
+        <Route element={<StudentProvider><StudentLayout /></StudentProvider>}>
           <Route path="/student/dashboard" element={<StudentDashboardPage />} />
           <Route path="/student/learn/:lessonId" element={<StudentLessonPage />} />
           <Route path="/student/activity/:activityId" element={<StudentActivityPage />} />
