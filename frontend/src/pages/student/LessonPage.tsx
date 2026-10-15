@@ -262,14 +262,13 @@ export default function LessonPage() {
                     </>
                   )}
                   {!isCompleted && isCurrent && (
-                    <Link
-                      to={`/student/activity/${activity.id}`}
+                    <button
                       onClick={() => handleStartActivity(activity.id)}
                       className="btn btn-primary btn-sm"
                     >
                       <PlayCircle className="w-4 h-4" />
                       Start
-                    </Link>
+                    </button>
                   )}
                   {!isCompleted && index !== currentActivityIndex && (
                     <span className="text-sm text-gray-400">Locked</span>
@@ -297,14 +296,13 @@ export default function LessonPage() {
           Back to Dashboard
         </Link>
         {currentActivityIndex < lesson.activities.length - 1 && (
-          <Link
-            to={`/student/activity/${lesson.activities[currentActivityIndex + 1].id}`}
+          <button
             onClick={() => handleStartActivity(lesson.activities[currentActivityIndex + 1].id)}
             className="btn btn-primary"
           >
             Next Activity
             <ChevronRight className="w-5 h-5" />
-          </Link>
+          </button>
         )}
       </div>
 

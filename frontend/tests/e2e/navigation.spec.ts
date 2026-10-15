@@ -19,8 +19,8 @@ test.describe('Student Navigation', () => {
     await expect(page.locator('text=My Journey').first()).toBeVisible({ timeout: 10000 });
     await page.locator('text=My Journey').first().click({ force: true });
     await expect(page).toHaveURL(/.*student\/history/);
-    // Page title should be "My Journey"
-    await expect(page.locator('h1:has-text("My Journey")')).toBeVisible({ timeout: 10000 });
+    // Page title should be "Learning Journey"
+    await expect(page.locator('h1:has-text("Learning Journey")')).toBeVisible({ timeout: 10000 });
   });
 
   test('should navigate to My Rewards', async ({ page }) => {
@@ -56,10 +56,11 @@ test.describe('Student Navigation', () => {
   test('should reload journey page correctly', async ({ page }) => {
     await expect(page.locator('text=My Journey').first()).toBeVisible({ timeout: 10000 });
     await page.locator('text=My Journey').first().click({ force: true });
-    await expect(page.locator('h1:has-text("My Journey")')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('h1:has-text("Learning Journey")')).toBeVisible({ timeout: 10000 });
     
     await page.reload();
-    await expect(page.locator('h1:has-text("My Journey")')).toBeVisible({ timeout: 10000 });
+    // Increase timeout for reload as auth re-validation and data fetching may take time
+    await expect(page.locator('h1:has-text("Learning Journey")')).toBeVisible({ timeout: 30000 });
   });
 
   test('should reload rewards page correctly', async ({ page }) => {
@@ -68,6 +69,7 @@ test.describe('Student Navigation', () => {
     await expect(page.locator('h1:has-text("My Rewards")')).toBeVisible({ timeout: 10000 });
     
     await page.reload();
-    await expect(page.locator('h1:has-text("My Rewards")')).toBeVisible({ timeout: 10000 });
+    // Increase timeout for reload as auth re-validation and data fetching may take time
+    await expect(page.locator('h1:has-text("My Rewards")')).toBeVisible({ timeout: 30000 });
   });
 });

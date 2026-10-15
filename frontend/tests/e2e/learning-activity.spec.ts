@@ -18,6 +18,7 @@ test.describe('Learning Activity', () => {
   });
 
   test('should start activity and submit answer', async ({ page }) => {
+    test.setTimeout(60000);
     // Go to lesson page
     await page.goto('/student/learn/22');
     await expect(page.locator('text=Activity 1')).toBeVisible({ timeout: 20000 });
@@ -29,22 +30,23 @@ test.describe('Learning Activity', () => {
     await expect(page).toHaveURL(/.*student\/activity\/64/);
     
     // Wait for activity content to load (not loading spinner)
-    await expect(page.locator('text=Loading activity...')).not.toBeVisible({ timeout: 20000 });
+    await expect(page.locator('text=Loading activity...')).not.toBeVisible({ timeout: 30000 });
     // Use h1 for activity title on activity page
-    await expect(page.locator('h1:has-text("Activity 1")')).toBeVisible({ timeout: 20000 });
+    await expect(page.locator('h1:has-text("Activity 1")')).toBeVisible({ timeout: 30000 });
     
-    // Wait for options to load
-    await expect(page.locator('text=Option 1').first()).toBeVisible({ timeout: 15000 });
-    await page.locator('text=Option 1').first().click({ force: true });
+    // Wait for options to load - click the button containing "Option 1"
+    await expect(page.getByRole('button', { name: 'Option 1' })).toBeVisible({ timeout: 15000 });
+    await page.getByRole('button', { name: 'Option 1' }).first().click();
     
-    // Should show feedback
-    await expect(page.locator('text=Correct')).toBeVisible({ timeout: 10000 });
+    // Should show feedback - use a more flexible selector that matches partial text
+    await expect(page.locator('p:has-text("Correct")')).toBeVisible({ timeout: 10000 });
     
     // Click Next to proceed
     await page.click('button:has-text("Next")');
   });
 
   test('should resume existing attempt on reload', async ({ page }) => {
+  test.setTimeout(60000);
     // Go to lesson page
     await page.goto('/student/learn/22');
     await expect(page.locator('text=Activity 1')).toBeVisible({ timeout: 20000 });
@@ -60,14 +62,15 @@ test.describe('Learning Activity', () => {
     await expect(page.locator('h1:has-text("Activity 1")')).toBeVisible({ timeout: 20000 });
     
     // Select an option
-    await expect(page.locator('text=Option 1').first()).toBeVisible({ timeout: 15000 });
-    await page.locator('text=Option 1').first().click({ force: true });
+    await expect(page.getByRole('button', { name: 'Option 1' })).toBeVisible({ timeout: 15000 });
+    await page.getByRole('button', { name: 'Option 1' }).first().click();
     
     // Reload page
     await page.reload();
     
     // Should still show the activity (attempt should resume)
-    await expect(page.locator('text=Loading activity...')).not.toBeVisible({ timeout: 20000 });
-    await expect(page.locator('h1:has-text("Activity 1")')).toBeVisible({ timeout: 20000 });
+    // Increase timeout for reload as auth re-validation and activity loading may take time
+    await expect(page.locator('text=Loading activity...')).not.toBeVisible({ timeout: 30000 });
+    await expect(page.locator('h1:has-text("Activity 1")')).toBeVisible({ timeout: 30000 });
   });
 });

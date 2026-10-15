@@ -606,13 +606,13 @@ export const studentApi = {
     api.get<AttemptStartResponse>(`/students/me/attempts/${attemptId}`),
   
   submitAnswer: (attemptId: number, questionId: number, selectedOptionIds: number[]) => 
-    api.post<AnswerSubmitResponse>(`/attempts/${attemptId}/responses`, { 
+    api.post<AnswerSubmitResponse>(`/students/attempts/${attemptId}/responses`, { 
       question_id: questionId, 
       selected_option_ids: selectedOptionIds 
     }),
   
   completeAttempt: (attemptId: number) => 
-    api.post<AttemptCompleteResponse>(`/attempts/${attemptId}/complete`),
+    api.post<AttemptCompleteResponse>(`/students/attempts/${attemptId}/complete`),
   
   getRewards: () => 
     api.get<Reward[]>('/students/me/rewards'),
@@ -730,6 +730,7 @@ export interface AdminStage {
   icon: string | null;
   color: string | null;
   is_active: boolean;
+  domains?: Array<{ id: number; code: string; name: string }>;
 }
 
 export interface AdminLesson {
@@ -742,6 +743,7 @@ export interface AdminLesson {
   estimated_duration_minutes: number | null;
   display_order: number;
   published_at: string | null;
+  activity_count?: number;
 }
 
 export interface AdminActivity {
@@ -750,8 +752,36 @@ export interface AdminActivity {
   type: string;
   title: string;
   lesson_title: string;
+  lesson_id: number;
   status: string;
   display_order: number;
+}
+
+export interface AdminSubject {
+  id: number;
+  code: string;
+  name: string;
+  description: string | null;
+  stage_id: number;
+  domain_id: number;
+  display_order: number;
+  icon: string | null;
+  color: string | null;
+  is_active: boolean;
+  stage_name?: string;
+  domain_name?: string;
+}
+
+export interface ValidationErrorDetail {
+  field: string;
+  message: string;
+  code: string;
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  errors: ValidationErrorDetail[];
+  warnings: ValidationErrorDetail[];
 }
 
 export interface AnalyticsData {
@@ -832,11 +862,80 @@ export const adminApi = {
   }) => 
     api.get<AdminLesson[]>(`/admin/lessons`, { params }),
   
+  createLesson: (data: {
+    topic_id: number;
+    code: string;
+    status?: string;
+    version?: number;
+    estimated_duration_minutes?: number;
+    thumbnail_url?: string;
+    instructions?: string;
+    display_order?: number;
+    is_active?: boolean;
+    translations?: Array<{ language: string; title: string; description?: string; instructions?: string; audio_url?: string }>;
+  }) => 
+    api.post<AdminLesson>(`/admin/lessons`, data),
+  
+  updateLesson: (lessonId: number, data: {
+    topic_id?: number;
+    status?: string;
+    version?: number;
+    estimated_duration_minutes?: number;
+    thumbnail_url?: string;
+    instructions?: string;
+    display_order?: number;
+    is_active?: boolean;
+    translations?: Array<{ language: string; title: string; description?: string; instructions?: string; audio_url?: string }>;
+  }) => 
+    api.patch<AdminLesson>(`/admin/lessons/${lessonId}`, data),
+  
   publishLesson: (lessonId: number) => 
-    api.post(`/admin/lessons/${lessonId}/publish`),
+    api.post<ValidationResult>(`/admin/lessons/${lessonId}/publish`),
+  
+  validateLesson: (lessonId: number) => 
+    api.get<ValidationResult>(`/admin/lessons/${lessonId}/validate`),
   
   unpublishLesson: (lessonId: number) => 
     api.post(`/admin/lessons/${lessonId}/unpublish`),
+  
+  archiveLesson: (lessonId: number) => 
+    api.post(`/admin/lessons/${lessonId}/archive`),
+
+  getSubjects: (params?: { 
+    stage_id?: number; 
+    domain_id?: number; 
+    limit?: number; 
+    offset?: number; 
+  }) => 
+    api.get<AdminSubject[]>(`/admin/subjects`, { params }),
+  
+  createSubject: (data: {
+    stage_id: number;
+    domain_id: number;
+    code: string;
+    name: string;
+    description?: string;
+    display_order?: number;
+    icon?: string;
+    color?: string;
+    is_active?: boolean;
+  }) => 
+    api.post<AdminSubject>(`/admin/subjects`, data),
+  
+  updateSubject: (subjectId: number, data: {
+    stage_id?: number;
+    domain_id?: number;
+    name?: string;
+    description?: string;
+    display_order?: number;
+    icon?: string;
+    color?: string;
+    is_active?: boolean;
+  }) => 
+    api.patch<AdminSubject>(`/admin/subjects/${subjectId}`, data),
+  
+  deleteSubject: (subjectId: number) => 
+    api.delete(`/admin/subjects/${subjectId}`),
   
   getActivities: (params?: { 
     lesson_id?: number; 
@@ -846,6 +945,41 @@ export const adminApi = {
     offset?: number; 
   }) => 
     api.get<AdminActivity[]>(`/admin/activities`, { params }),
+  
+  createActivity: (data: {
+    lesson_id: number;
+    type: string;
+    code: string;
+    status?: string;
+    version?: number;
+    display_order?: number;
+    estimated_duration_minutes?: number;
+    instructions?: string;
+    configuration?: Record<string, unknown>;
+    is_active?: boolean;
+    translations?: Array<{ language: string; title: string; instructions?: string; audio_url?: string }>;
+  }) => 
+    api.post<AdminActivity>(`/admin/activities`, data),
+  
+  updateActivity: (activityId: number, data: {
+    lesson_id?: number;
+    type?: string;
+    status?: string;
+    version?: number;
+    display_order?: number;
+    estimated_duration_minutes?: number;
+    instructions?: string;
+    configuration?: Record<string, unknown>;
+    is_active?: boolean;
+    translations?: Array<{ language: string; title: string; instructions?: string; audio_url?: string }>;
+  }) => 
+    api.patch<AdminActivity>(`/admin/activities/${activityId}`, data),
+  
+  deleteActivity: (activityId: number) => 
+    api.delete(`/admin/activities/${activityId}`),
+  
+  validateActivity: (activityId: number) => 
+    api.get<ValidationResult>(`/admin/activities/${activityId}/validate`),
   
   getAnalytics: (days = 30) => 
     api.get<AnalyticsData>(`/admin/analytics`, { params: { days } }),
