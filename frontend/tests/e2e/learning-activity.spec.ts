@@ -11,6 +11,19 @@ test.describe('Learning Activity', () => {
     await expect(page.locator('text=Aarav').first()).toBeVisible({ timeout: 10000 });
   });
 
+  test.afterEach(async ({ page }) => {
+    // Clear cookies and storage to ensure test isolation
+    await page.context().clearCookies();
+    await page.evaluate(() => {
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (e) {
+        // Ignore cross-origin errors
+      }
+    });
+  });
+
   test('should open Alphabet A-E lesson (Lesson 22) and show activities', async ({ page }) => {
     // Navigate to lesson
     await page.goto('/student/learn/22');
@@ -46,7 +59,7 @@ test.describe('Learning Activity', () => {
   });
 
   test('should resume existing attempt on reload', async ({ page }) => {
-  test.setTimeout(60000);
+    test.setTimeout(60000);
     // Go to lesson page
     await page.goto('/student/learn/22');
     await expect(page.locator('text=Activity 1')).toBeVisible({ timeout: 20000 });

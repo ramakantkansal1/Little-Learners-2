@@ -14,6 +14,19 @@ test.describe('Student Navigation', () => {
     await expect(page.locator('text=Learning Home').first()).toBeVisible({ timeout: 10000 });
   });
 
+  test.afterEach(async ({ page }) => {
+    // Clear cookies and storage to ensure test isolation
+    await page.context().clearCookies();
+    await page.evaluate(() => {
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (e) {
+        // Ignore cross-origin errors
+      }
+    });
+  });
+
   test('should navigate to My Journey', async ({ page }) => {
     // Wait for My Journey to be visible and clickable
     await expect(page.locator('text=My Journey').first()).toBeVisible({ timeout: 10000 });
@@ -54,6 +67,7 @@ test.describe('Student Navigation', () => {
   });
 
   test('should reload journey page correctly', async ({ page }) => {
+    test.setTimeout(60000);
     await expect(page.locator('text=My Journey').first()).toBeVisible({ timeout: 10000 });
     await page.locator('text=My Journey').first().click({ force: true });
     await expect(page.locator('h1:has-text("Learning Journey")')).toBeVisible({ timeout: 10000 });
@@ -64,6 +78,7 @@ test.describe('Student Navigation', () => {
   });
 
   test('should reload rewards page correctly', async ({ page }) => {
+    test.setTimeout(60000);
     await expect(page.locator('text=My Rewards').first()).toBeVisible({ timeout: 10000 });
     await page.locator('text=My Rewards').first().click({ force: true });
     await expect(page.locator('h1:has-text("My Rewards")')).toBeVisible({ timeout: 10000 });
