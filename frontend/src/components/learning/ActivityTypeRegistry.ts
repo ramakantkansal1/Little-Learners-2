@@ -1,133 +1,51 @@
 import { ActivityType } from '@/types';
-import { ReactNode } from 'react';
-import type { ActivityTypeComponent, ActivityTypeComponentProps } from './ActivityTypeRegistry.types';
+import {
+  ActivityTypeComponent,
+  ActivityTypeRegistryEntry,
+} from './ActivityTypeRegistry.types';
 
 /**
- * Registry entry for an activity type.
+ * Registry for activity type components.
+ * Maps ActivityType enum values to their React component implementations.
  */
-export interface ActivityTypeRegistryEntry {
-  /** The activity type identifier (matches backend enum) */
-  type: ActivityType;
-  /** Human-readable label for the activity type */
-  label: string;
-  /** Icon or emoji for the activity type */
-  icon: string;
-  /** Color theme for the activity type */
-  color: string;
-  /** The React component that renders this activity type */
-  component: ActivityTypeComponent;
-  /** Whether this activity type supports audio narration */
-  supportsAudio: boolean;
-  /** Whether this activity type supports images in options */
-  supportsImages: boolean;
-  /** Default configuration schema for validation */
-  defaultConfig: Record<string, unknown>;
+export class ActivityTypeRegistry {
+  private entries = new Map<ActivityType, ActivityTypeRegistryEntry>();
+
+  /**
+   * Register an activity type entry.
+   */
+  register(entry: ActivityTypeRegistryEntry): void {
+    this.entries.set(entry.type, entry);
+  }
+
+  /**
+   * Get the registry entry for an activity type.
+   */
+  get(type: ActivityType): ActivityTypeRegistryEntry | undefined {
+    return this.entries.get(type);
+  }
+
+  /**
+   * Get the React component for an activity type.
+   * Returns undefined if the type is not registered.
+   */
+  getComponent(type: ActivityType): ActivityTypeComponent | undefined {
+    const entry = this.entries.get(type);
+    return entry?.component;
+  }
+
+  /**
+   * Get all registered activity type entries.
+   */
+  getAllEntries(): ActivityTypeRegistryEntry[] {
+    return Array.from(this.entries.values());
+  }
 }
 
 /**
- * Type for activity type component.
- * Each activity type component receives the same props interface.
+ * Singleton registry instance.
  */
-export type ActivityTypeComponent = (props: ActivityTypeComponentProps) => ReactNode;
-
-/**
- * Props passed to all activity type components.
- * Contains the activity data, current question, and callback handlers.
- */
-export interface ActivityTypeComponentProps {
-  /** The full activity data including questions and options */
-  activity: {
-    id: number;
-    type: ActivityType;
-    code: string;
-    title: string;
-    instructions: string | null;
-    estimated_duration_minutes: number | null;
-    configuration: Record<string, unknown> | null;
-    questions: Array<{
-      id: number;
-      question_type: string;
-      prompt: string;
-      prompt_audio_url: string | null;
-      display_order: number;
-      points: number;
-      configuration: Record<string, unknown> | null;
-      options: Array<{
-        id: number;
-        text: string;
-        text_audio_url: string | null;
-        image_url: string | null;
-        display_order: number;
-        configuration?: Record<string, unknown>;
-      }>;
-    }>;
-  };
-  /** Current question index */
-  currentQuestion: number;
-  /** Total number of questions */
-  totalQuestions: number;
-  /** Currently selected answer option ID */
-  selectedAnswer: number | null;
-  /** Whether feedback is currently shown */
-  showFeedback: boolean;
-  /** Whether the current answer was correct */
-  isCorrect: boolean;
-  /** IDs of correct options for the current question */
-  correctOptionIds: number[];
-  /** Current score */
-  score: number;
-  /** Whether activity is completed */
-  completed: boolean;
-  /** Callback when an answer is selected */
-  onAnswer: (answerId: number) => void;
-  /** Callback to proceed to next question or finish */
-  onNext: () => void;
-  /** Callback to go to previous question */
-  onPrevious: () => void;
-  /** Callback to retry the activity */
-  onRetry: () => void;
-  /** Callback to toggle audio */
-  onToggleAudio: () => void;
-  /** Whether audio is enabled */
-  audioEnabled: boolean;
-  /** Activity attempt ID for answer submission */
-  attemptId: number | null;
-  /** Loading state */
-  loading: boolean;
-  /** Submitting state */
-  submitting: boolean;
-  /** Error message if any */
-  error: string | null;
-}
-
-/**
- * Fallback component for unsupported activity types.
- * Displays a friendly message indicating the activity type is not yet supported.
- */
-export function UnsupportedActivityTypeComponent(props: ActivityTypeComponentProps): ReactNode {
-  const { activity, onRetry } = props;
-  const registryEntry = activityTypeRegistry.get(activity.type);
-  
-  return (
-    <div className="card p-8 text-center">
-      <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4 text-4xl">
-        {registryEntry?.icon || '📝'}
-      </div>
-      <h2 className="text-xl font-display font-bold text-gray-900 mb-2">
-        {registryEntry?.label || activity.type.replace(/_/g, ' ')}
-      </h2>
-      <p className="text-gray-600 mb-6">
-        This activity type is not yet supported in the current version.
-      </p>
-      <p className="text-sm text-gray-500 mb-6">
-        Type: <code className="bg-gray-100 px-1 rounded">{activity.type}</code>
-      </p>
-      <button onClick={onRetry} className="btn btn-primary">
-        Try Another Activity
-      </button>
-    </div>
-  );
-}
+export const activityTypeRegistry = new ActivityTypeRegistry();
 
 /**
  * Get registry entry for an activity type.
@@ -171,7 +89,7 @@ export function validateActivityConfig(
   config: Record<string, unknown> | null
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
-  
+
   if (!config) {
     return { valid: true, errors: [] };
   }
@@ -198,13 +116,24 @@ export function validateActivityConfig(
   return { valid: errors.length === 0, errors };
 }
 
-// Import the registry instance (defined in ActivityTypeRegistry.tsx to avoid circular dependency)
-import { activityTypeRegistry } from './ActivityTypeRegistry';
-
 /**
- * Register activity types - called on module load.
+ * Register activity types - safe to call multiple times.
+ * Registration entries live in ActivityRenderer.tsx (where components are
+ * available) to avoid circular dependencies. This no-op indirection is kept
+ * for backwards compatibility with existing imports.
  */
 export function registerActivityTypes(): void {
-  // This function is implemented in ActivityRenderer.tsx where components are available
-  // to avoid circular dependencies
+  // No-op here; registrations happen in ActivityRenderer.tsx
+}
+
+/**
+ * Ensure the singleton registry has been populated by loading the
+ * ActivityRenderer registration side-effect. Importing ActivityRenderer is
+ * safe here at call time (not module top-level), so pages that only import
+ * ActivityTypeRegistry (e.g. admin CurriculumPage) can populate the selector
+ * without creating a circular import.
+ */
+export async function ensureActivityTypesRegistered(): Promise<void> {
+  if (activityTypeRegistry.getAllEntries().length > 0) return;
+  await import('./ActivityRenderer');
 }

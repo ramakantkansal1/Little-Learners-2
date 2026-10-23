@@ -1,22 +1,31 @@
 """
 Student API endpoints.
 """
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.exceptions import NotFoundException, ValidationException
 from app.models import (
-    User, StudentProfile, LearningStage, Lesson, Activity,
-    StudentLessonProgress, ActivityAttempt, ActivityResponse,
-    Question, AnswerOption, StudentRewardAward, StudentReward,
-    ContentStatusEnum, ActivityTypeEnum
+    User,
+    StudentProfile,
+    LearningStage,
+    Lesson,
+    Activity,
+    ActivityAttempt,
+    ActivityResponse,
+    Question,
+    AnswerOption,
+    StudentReward,
+    StudentRewardAward,
+    StudentLessonProgress,
+    ActivityTypeEnum
 )
 from app.permissions.dependencies import get_current_user
 from app.permissions.roles import Permission
@@ -89,6 +98,8 @@ class AttemptStartResponse(BaseModel):
     attempt_id: int
     activity: ActivityDetailResponse
     questions: List[dict]
+    saved_progress: Optional[dict] = None
+    lesson_progress: Optional[dict] = None
 
 
 class AnswerSubmitRequest(BaseModel):
@@ -101,6 +112,7 @@ class AttemptCompleteResponse(BaseModel):
     passed: bool
     rewards_earned: List[dict]
     next_activity_id: Optional[int]
+    streak: Optional[dict] = None
 
 
 class RewardResponse(BaseModel):
@@ -147,26 +159,126 @@ async def get_student_profile(db: AsyncSession, user_id: int) -> StudentProfile:
     return student
 
 
-def get_lesson_translations(db, lesson_id: int, language: str):
-    """Get lesson translations for a language."""
-    from app.models import LessonTranslation
-    result = db.execute(
-        select(LessonTranslation)
-        .where(LessonTranslation.lesson_id == lesson_id)
-        .where(LessonTranslation.language == language)
+async def update_lesson_progress(
+    db: AsyncSession,
+    student: StudentProfile,
+    lesson_id: int,
+    activity_id: Optional[int] = None,
+) -> StudentLessonProgress:
+    """Create or update lesson progress for a student.
+
+    Updates last_activity_at, current_activity_id (if provided), and
+    recalculates completion_percentage based on completed activities.
+    Marks the lesson completed when all published activities are done.
+    """
+    # Get or create lesson progress
+    progress_result = await db.execute(
+        select(StudentLessonProgress)
+        .where(StudentLessonProgress.student_id == student.id)
+        .where(StudentLessonProgress.lesson_id == lesson_id)
     )
-    return result.scalar_one_or_none()
+    progress = progress_result.scalar_one_or_none()
+    if not progress:
+        progress = StudentLessonProgress(
+            student_id=student.id,
+            lesson_id=lesson_id,
+            status="in_progress",
+            started_at=datetime.now(timezone.utc),
+            last_activity_at=datetime.now(timezone.utc),  # Set last_activity_at on creation
+        )
+        db.add(progress)
+        await db.flush()
+    else:
+        # Always refresh activity timestamp
+        progress.last_activity_at = datetime.now(timezone.utc)
+
+    # Track current activity if provided
+    if activity_id is not None:
+        progress.current_activity_id = activity_id
+
+    # Count total published, active activities for this lesson
+    total_result = await db.execute(
+        select(func.count(Activity.id))
+        .where(Activity.lesson_id == lesson_id)
+        .where(Activity.status == "published")
+        .where(Activity.is_active == True)
+    )
+    total_activities = total_result.scalar() or 0
+
+    # Count distinct activities the student has completed
+    completed_result = await db.execute(
+        select(func.count(func.distinct(ActivityAttempt.activity_id)))
+        .join(Activity, ActivityAttempt.activity_id == Activity.id)
+        .where(ActivityAttempt.student_id == student.id)
+        .where(ActivityAttempt.status == "completed")
+        .where(Activity.lesson_id == lesson_id)
+        .where(Activity.status == "published")
+        .where(Activity.is_active == True)
+    )
+    completed_activities = completed_result.scalar() or 0
+
+    # Recalculate completion percentage (guard against division by zero)
+    if total_activities > 0:
+        progress.completion_percentage = int(
+            (completed_activities / total_activities) * 100
+        )
+    else:
+        progress.completion_percentage = 0
+
+    # Update status based on completion
+    if total_activities > 0 and completed_activities >= total_activities:
+        progress.status = "completed"
+        if progress.completed_at is None:
+            progress.completed_at = datetime.now(timezone.utc)
+    else:
+        if progress.status == "not_started":
+            progress.status = "in_progress"
+        # Keep completion_percentage as calculated; don't override status to completed
+
+    return progress
 
 
-def get_activity_translations(db, activity_id: int, language: str):
-    """Get activity translations for a language."""
-    from app.models import ActivityTranslation
-    result = db.execute(
-        select(ActivityTranslation)
-        .where(ActivityTranslation.activity_id == activity_id)
-        .where(ActivityTranslation.language == language)
+async def calculate_streak(
+    db: AsyncSession,
+    student: StudentProfile,
+    completion_date: date,
+) -> tuple[int, int]:
+    """Calculate and update streak based on lesson completion date.
+
+    Streak rules:
+    - First qualifying completion sets streak to 1
+    - Same-day repeated completions do not increment streak
+    - Consecutive calendar day extends streak by 1
+    - Missed day(s) resets streak to 1
+    - longest_streak is the maximum streak ever achieved
+
+    Returns (current_streak, longest_streak).
+    """
+    # Reload student.last_activity_date from DB to get fresh value
+    result = await db.execute(
+        select(StudentProfile.last_activity_date).where(StudentProfile.id == student.id)
     )
-    return result.scalar_one_or_none()
+    student.last_activity_date = result.scalar_one()
+    today = completion_date
+
+    if student.last_activity_date is None:
+        # First qualifying completion
+        student.current_streak = 1
+        student.longest_streak = max(student.longest_streak, 1)
+    elif student.last_activity_date == today:
+        # Same day - do not increment
+        pass
+    elif student.last_activity_date == today - timedelta(days=1):
+        # Consecutive calendar day
+        student.current_streak += 1
+        student.longest_streak = max(student.longest_streak, student.current_streak)
+    else:
+        # Missed day(s) - reset streak
+        student.current_streak = 1
+        student.longest_streak = max(student.longest_streak, 1)
+
+    student.last_activity_date = today
+    return student.current_streak, student.longest_streak
 
 
 # Endpoints
@@ -325,7 +437,7 @@ async def get_dashboard(
             "lessons_completed": lessons_completed,
             "rewards_earned": rewards_earned,
             "time_this_week": f"{total_time // 3600}h {(total_time % 3600) // 60}m",
-            "current_streak": 0,  # TODO: implement streak
+            "current_streak": student.current_streak,
         }
     )
 
@@ -444,7 +556,10 @@ async def get_lesson_content(
             started_at=datetime.now(timezone.utc),
         )
         db.add(progress)
-        await db.commit()
+        await db.flush()
+    elif progress.status == "not_started":
+        progress.status = "in_progress"
+        progress.started_at = datetime.now(timezone.utc)
     
     # Get lesson translation
     trans_result = await db.execute(
@@ -508,8 +623,6 @@ async def get_lesson_content(
                         "text_audio_url": opt.text_audio_url,
                         "image_url": opt.image_url,
                         "display_order": opt.display_order,
-                        "feedback_correct": opt.feedback_correct,
-                        "feedback_incorrect": opt.feedback_incorrect,
                     }
                     for opt in options
                 ],
@@ -526,6 +639,12 @@ async def get_lesson_content(
             "questions": questions_data,
         })
     
+    # Prepare progress info for response
+    progress_data = {
+        "status": progress.status,
+        "completion_percentage": progress.completion_percentage,
+    }
+    
     return {
         "id": lesson.id,
         "title": trans.title if trans else lesson.code,
@@ -533,6 +652,7 @@ async def get_lesson_content(
         "instructions": trans.instructions if trans else lesson.instructions,
         "estimated_duration_minutes": lesson.estimated_duration_minutes,
         "activities": activities_data,
+        "progress": progress_data,
     }
 
 
@@ -571,12 +691,16 @@ async def start_activity_attempt(
             lesson_id=activity.lesson_id,
             status="in_progress",
             started_at=datetime.now(timezone.utc),
+            last_activity_at=datetime.now(timezone.utc),
+            current_activity_id=activity.id,
         )
         db.add(progress)
         await db.flush()
     elif progress.status == "not_started":
         progress.status = "in_progress"
         progress.started_at = datetime.now(timezone.utc)
+        progress.last_activity_at = datetime.now(timezone.utc)
+    progress.current_activity_id = activity.id
     
     # Create attempt
     attempt_count_result = await db.execute(
@@ -656,10 +780,29 @@ async def start_activity_attempt(
         questions=questions_data,
     )
     
+    # Return progress info for frontend
+    saved_progress = None
+    if attempt.metadata_json:
+        saved_progress = {
+            "current_question_index": attempt.metadata_json.get("current_question_index", 0),
+            "accumulated_score": attempt.metadata_json.get("accumulated_score", 0),
+            "answers_submitted": attempt.metadata_json.get("answers_submitted", 0),
+        }
+    
+    lesson_progress = None
+    if progress:
+        lesson_progress = {
+            "status": progress.status,
+            "completion_percentage": progress.completion_percentage,
+            "time_spent_seconds": progress.time_spent_seconds,
+        }
+    
     return AttemptStartResponse(
         attempt_id=attempt.id,
         activity=activity_detail,
         questions=questions_data,
+        saved_progress=saved_progress,
+        lesson_progress=lesson_progress,
     )
 
 
@@ -688,8 +831,6 @@ async def get_activity_attempt(
     activity_result = await db.execute(
         select(Activity)
         .where(Activity.id == attempt.activity_id)
-        .where(Activity.status == "published")
-        .where(Activity.is_active == True)
     )
     activity = activity_result.scalar_one_or_none()
     if not activity:
@@ -708,12 +849,16 @@ async def get_activity_attempt(
             lesson_id=activity.lesson_id,
             status="in_progress",
             started_at=datetime.now(timezone.utc),
+            last_activity_at=datetime.now(timezone.utc),
+            current_activity_id=activity.id,
         )
         db.add(progress)
         await db.flush()
     elif progress.status == "not_started":
         progress.status = "in_progress"
         progress.started_at = datetime.now(timezone.utc)
+        progress.last_activity_at = datetime.now(timezone.utc)
+    progress.current_activity_id = activity.id
     
     # Get activity details with translations
     act_trans_result = await db.execute(
@@ -773,10 +918,29 @@ async def get_activity_attempt(
         questions=questions_data,
     )
     
+    # Return progress info for frontend
+    saved_progress = None
+    if attempt.metadata_json:
+        saved_progress = {
+            "current_question_index": attempt.metadata_json.get("current_question_index", 0),
+            "accumulated_score": attempt.metadata_json.get("accumulated_score", 0),
+            "answers_submitted": attempt.metadata_json.get("answers_submitted", 0),
+        }
+    
+    lesson_progress = None
+    if progress:
+        lesson_progress = {
+            "status": progress.status,
+            "completion_percentage": progress.completion_percentage,
+            "time_spent_seconds": progress.time_spent_seconds,
+        }
+    
     return AttemptStartResponse(
         attempt_id=attempt.id,
         activity=activity_detail,
         questions=questions_data,
+        saved_progress=saved_progress,
+        lesson_progress=lesson_progress,
     )
 
 
@@ -789,8 +953,6 @@ async def submit_answer(
 ):
     """Submit answer for a question."""
     student = await get_student_profile(db, current_user.id)
-    
-    from app.models import ActivityAttempt, ActivityResponse, Question, AnswerOption
     
     # Verify attempt belongs to student
     attempt_result = await db.execute(
@@ -830,26 +992,62 @@ async def submit_answer(
     
     points = question.points if is_correct else 0
     
-    # Record response
-    response = ActivityResponse(
-        attempt_id=attempt_id,
-        question_id=request.question_id,
-        selected_option_ids=request.selected_option_ids,
-        is_correct=is_correct,
-        points_earned=points,
-        time_spent_seconds=0,  # TODO: track time
+    # Check if response already exists (upsert behavior)
+    existing_response_result = await db.execute(
+        select(ActivityResponse)
+        .where(ActivityResponse.attempt_id == attempt_id)
+        .where(ActivityResponse.question_id == request.question_id)
     )
-    db.add(response)
+    existing_response = existing_response_result.scalar_one_or_none()
+    
+    if existing_response:
+        # Update existing response
+        existing_response.selected_option_ids = request.selected_option_ids
+        existing_response.is_correct = is_correct
+        existing_response.points_earned = points
+        existing_response.time_spent_seconds = 0  # TODO: track time
+        response = existing_response
+    else:
+        # Record new response
+        response = ActivityResponse(
+            attempt_id=attempt_id,
+            question_id=request.question_id,
+            selected_option_ids=request.selected_option_ids,
+            is_correct=is_correct,
+            points_earned=points,
+            time_spent_seconds=0,  # TODO: track time
+        )
+        db.add(response)
     
     # Update attempt status
     attempt.status = "in_progress"
     
+    # Update attempt metadata to track progress (store in attempt.metadata_json)
+    if attempt.metadata_json is None:
+        attempt.metadata_json = {}
+    # current_question_index is 0-indexed (0 for first question)
+    # answers_submitted is 1-indexed (1 for first answer)
+    attempt.metadata_json["current_question_index"] = attempt.metadata_json.get("current_question_index", 0)
+    attempt.metadata_json["accumulated_score"] = attempt.metadata_json.get("accumulated_score", 0) + points
+    attempt.metadata_json["answers_submitted"] = attempt.metadata_json.get("answers_submitted", 0) + 1
+    
     await db.commit()
+    
+    # Return progress info for frontend
+    saved_progress = None
+    if attempt.metadata_json:
+        saved_progress = {
+            "current_question_index": attempt.metadata_json.get("current_question_index", 0),
+            "accumulated_score": attempt.metadata_json.get("accumulated_score", 0),
+            "answers_submitted": attempt.metadata_json.get("answers_submitted", 0),
+        }
     
     return {
         "is_correct": is_correct,
         "points_earned": points,
         "correct_options": [opt.id for opt in selected_options if opt.is_correct],
+        "saved_progress": saved_progress,
+        "lesson_progress": None,  # Could add lesson progress here if needed
     }
 
 
@@ -956,35 +1154,36 @@ async def complete_activity_attempt(
                         "image_url": perfect_reward.image_url,
                     })
     
-    # First activity reward
-    first_activity_result = await db.execute(
-        select(func.count(ActivityAttempt.id))
-        .where(ActivityAttempt.student_id == student.id)
-        .where(ActivityAttempt.status == "completed")
-    )
-    if first_activity_result.scalar() == 1:
-        first_reward_result = await db.execute(
-            select(StudentReward).where(StudentReward.code == "first_star")
+    # First activity reward (only for passed attempts)
+    if passed:
+        first_activity_result = await db.execute(
+            select(func.count(ActivityAttempt.id))
+            .where(ActivityAttempt.student_id == student.id)
+            .where(ActivityAttempt.status == "completed")
         )
-        first_reward = first_reward_result.scalar_one_or_none()
-        if first_reward:
-            existing = await db.execute(
-                select(StudentRewardAward)
-                .where(StudentRewardAward.student_id == student.id)
-                .where(StudentRewardAward.reward_id == first_reward.id)
+        if first_activity_result.scalar() == 1:
+            first_reward_result = await db.execute(
+                select(StudentReward).where(StudentReward.code == "first_star")
             )
-            if not existing.scalar_one_or_none():
-                award = StudentRewardAward(
-                    student_id=student.id,
-                    reward_id=first_reward.id,
-                    attempt_id=attempt_id,
+            first_reward = first_reward_result.scalar_one_or_none()
+            if first_reward:
+                existing = await db.execute(
+                    select(StudentRewardAward)
+                    .where(StudentRewardAward.student_id == student.id)
+                    .where(StudentRewardAward.reward_id == first_reward.id)
                 )
-                db.add(award)
-                rewards_earned.append({
-                    "name": first_reward.name,
-                    "type": first_reward.reward_type,
-                    "image_url": first_reward.image_url,
-                })
+                if not existing.scalar_one_or_none():
+                    award = StudentRewardAward(
+                        student_id=student.id,
+                        reward_id=first_reward.id,
+                        attempt_id=attempt_id,
+                    )
+                    db.add(award)
+                    rewards_earned.append({
+                        "name": first_reward.name,
+                        "type": first_reward.reward_type,
+                        "image_url": first_reward.image_url,
+                    })
     
     # Find next activity
     next_activity_id = None
@@ -1000,6 +1199,33 @@ async def complete_activity_attempt(
     next_activity = activity_result.scalar_one_or_none()
     if next_activity:
         next_activity_id = next_activity.id
+
+    # Update lesson progress with streak calculation
+    if attempt.lesson_progress_id:
+        progress_result = await db.execute(
+            select(StudentLessonProgress)
+            .where(StudentLessonProgress.id == attempt.lesson_progress_id)
+        )
+        progress = progress_result.scalar_one_or_none()
+        if progress:
+            # Calculate streak
+            current_streak, longest_streak = await calculate_streak(
+                db, student, datetime.now(timezone.utc).date()
+            )
+            progress.current_streak = current_streak
+            progress.longest_streak = longest_streak
+    
+    # Calculate streak if passed
+    streak_info = None
+    if passed:
+        current_streak, longest_streak = await calculate_streak(
+            db, student, datetime.now(timezone.utc).date()
+        )
+        streak_info = {
+            "current_streak": current_streak,
+            "longest_streak": longest_streak,
+            "last_activity_date": datetime.now(timezone.utc).date().isoformat(),
+        }
     
     await db.commit()
     
@@ -1008,6 +1234,7 @@ async def complete_activity_attempt(
         passed=passed,
         rewards_earned=rewards_earned,
         next_activity_id=next_activity_id,
+        streak=streak_info,
     )
 
 
@@ -1131,3 +1358,139 @@ async def update_preferences(
     await db.commit()
     
     return {"message": "Preferences updated"}
+
+
+# Helper functions (preserved from current working version)
+async def get_student_profile(db: AsyncSession, user_id: int) -> StudentProfile:
+    """Get student profile for current user."""
+    result = await db.execute(
+        select(StudentProfile)
+        .where(StudentProfile.user_id == user_id)
+        .options(selectinload(StudentProfile.current_stage))
+    )
+    student = result.scalar_one_or_none()
+    if not student or student.is_deleted:
+        raise NotFoundException("Student profile not found")
+    return student
+
+
+async def update_lesson_progress(
+    db: AsyncSession,
+    student: StudentProfile,
+    lesson_id: int,
+    activity_id: Optional[int] = None,
+) -> StudentLessonProgress:
+    """Create or update lesson progress for a student.
+
+    Updates last_activity_at, current_activity_id (if provided), and
+    recalculates completion_percentage based on completed activities.
+    Marks the lesson completed when all published activities are done.
+    """
+    # Get or create lesson progress
+    progress_result = await db.execute(
+        select(StudentLessonProgress)
+        .where(StudentLessonProgress.student_id == student.id)
+        .where(StudentLessonProgress.lesson_id == lesson_id)
+    )
+    progress = progress_result.scalar_one_or_none()
+    if not progress:
+        progress = StudentLessonProgress(
+            student_id=student.id,
+            lesson_id=lesson_id,
+            status="in_progress",
+            started_at=datetime.now(timezone.utc),
+            last_activity_at=datetime.now(timezone.utc),  # Set last_activity_at on creation
+        )
+        db.add(progress)
+        await db.flush()
+    else:
+        # Always refresh activity timestamp
+        progress.last_activity_at = datetime.now(timezone.utc)
+
+    # Track current activity if provided
+    if activity_id is not None:
+        progress.current_activity_id = activity_id
+
+    # Count total published, active activities for this lesson
+    total_result = await db.execute(
+        select(func.count(Activity.id))
+        .where(Activity.lesson_id == lesson_id)
+        .where(Activity.status == "published")
+        .where(Activity.is_active == True)
+    )
+    total_activities = total_result.scalar() or 0
+
+    # Count distinct activities the student has completed
+    completed_result = await db.execute(
+        select(func.count(func.distinct(ActivityAttempt.activity_id)))
+        .join(Activity, ActivityAttempt.activity_id == Activity.id)
+        .where(ActivityAttempt.student_id == student.id)
+        .where(ActivityAttempt.status == "completed")
+        .where(Activity.lesson_id == lesson_id)
+        .where(Activity.status == "published")
+        .where(Activity.is_active == True)
+    )
+    completed_activities = completed_result.scalar() or 0
+
+    # Recalculate completion percentage (guard against division by zero)
+    if total_activities > 0:
+        progress.completion_percentage = int(
+            (completed_activities / total_activities) * 100
+        )
+    else:
+        progress.completion_percentage = 0
+
+    # Update status based on completion
+    if total_activities > 0 and completed_activities >= total_activities:
+        progress.status = "completed"
+        if progress.completed_at is None:
+            progress.completed_at = datetime.now(timezone.utc)
+    else:
+        if progress.status == "not_started":
+            progress.status = "in_progress"
+        # Keep completion_percentage as calculated; don't override status to completed
+
+    return progress
+
+
+async def calculate_streak(
+    db: AsyncSession,
+    student: StudentProfile,
+    completion_date: date,
+) -> tuple[int, int]:
+    """Calculate and update streak based on lesson completion date.
+
+    Streak rules:
+    - First qualifying completion sets streak to 1
+    - Same-day repeated completions do not increment streak
+    - Consecutive calendar day extends streak by 1
+    - Missed day(s) resets streak to 1
+    - longest_streak is the maximum streak ever achieved
+
+    Returns (current_streak, longest_streak).
+    """
+    # Reload student.last_activity_date from DB to get fresh value
+    result = await db.execute(
+        select(StudentProfile.last_activity_date).where(StudentProfile.id == student.id)
+    )
+    student.last_activity_date = result.scalar_one()
+    today = completion_date
+
+    if student.last_activity_date is None:
+        # First qualifying completion
+        student.current_streak = 1
+        student.longest_streak = max(student.longest_streak, 1)
+    elif student.last_activity_date == today:
+        # Same day - do not increment
+        pass
+    elif student.last_activity_date == today - timedelta(days=1):
+        # Consecutive calendar day
+        student.current_streak += 1
+        student.longest_streak = max(student.longest_streak, student.current_streak)
+    else:
+        # Missed day(s) - reset streak
+        student.current_streak = 1
+        student.longest_streak = max(student.longest_streak, 1)
+
+    student.last_activity_date = today
+    return student.current_streak, student.longest_streak

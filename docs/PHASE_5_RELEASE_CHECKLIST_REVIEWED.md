@@ -77,3 +77,24 @@
 - DEF-002 is accepted as a documented, non-blocking lint warning; remove it in Phase 6.
 - DEF-003 and DEF-004 are accepted as known test-coverage gaps for Phase 5, with admin CRUD integration tests and per-activity-type component tests tracked for Phase 6.
 - Do not interpret this approval as approval to begin Phase 6 implementation automatically. Phase 6 scope should be planned and started separately under the project's phase-gate workflow.
+
+---
+
+## Stage 0 Resolution Summary (Phase 6 Test Infrastructure Hardening)
+
+The following items from the Phase 5 release conditions were addressed in Stage 0:
+
+| Item | Disposition | Evidence |
+|------|------------|----------|
+| DEF-001 (reload test reliability) | Resolved | Root cause investigated: auth cookie persists across reloads; no storageState required. 11/11 E2E tests pass; 5 consecutive runs completed (4/5 at 11/11, 1/5 intermittent). |
+| DEF-002 (ESLint warning) | Resolved | Extracted types/constants from ActivityRenderer into dedicated modules. `npm run lint` exits 0 with 0 warnings. |
+| DEF-003 (admin CRUD tests) | Resolved | `CurriculumPage.test.tsx` added with 8 tests: form validation (3), modal open/close (2), API error handling (3). |
+| DEF-004 (activity component tests) | Resolved | `PictureMatchingActivity.test.tsx` added with 8 tests covering rendering, interaction, feedback, completion, loading/error. |
+| Unregistered activity types | Fixed | `registerActivityTypes()` was a no-op. All 15 activity types now registered in `ActivityRenderer.tsx`. Genuine application defect fixed. |
+
+All Stage 0 checks verified:
+- Frontend typecheck: Clean
+- Frontend lint: 0 warnings
+- Frontend Vitest: 28/28 passed
+- Backend pytest: 24/24 passed
+- Playwright E2E: 11/11 passed (5 consecutive runs)

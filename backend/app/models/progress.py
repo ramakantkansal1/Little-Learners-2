@@ -207,6 +207,7 @@ class StudentRewardAward(Base, IDMixin, TimestampMixin):
     # Constraints
     __table_args__ = (
         Index("ix_reward_award_student_earned", "student_id", "earned_at"),
+        UniqueConstraint("student_id", "reward_id", name="uq_student_reward_award_student_reward"),
     )
 
     def __repr__(self) -> str:

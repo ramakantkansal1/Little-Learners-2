@@ -38,6 +38,11 @@ htmlcov/
 .pytest_cache/
 .coverage.*
 
+# Playwright auth state and reports (generated, do not commit)
+frontend/tests/e2e/.auth/
+frontend/test-results/
+frontend/playwright-report/
+
 # Build artifacts
 dist/
 build/

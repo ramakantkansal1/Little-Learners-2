@@ -12,7 +12,8 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    // Clear cookies and storage before each test for isolation
+    // No storageState: each test authenticates via UI in beforeEach.
+    // Credentials are entered per-test and never stored in source control.
     storageState: undefined,
   },
   projects: [

@@ -4,7 +4,7 @@ Parent and student profile models.
 from datetime import datetime, date, timezone
 from typing import Optional, List
 
-from sqlalchemy import String, Boolean, DateTime, Date, ForeignKey, UniqueConstraint, Index, Text, Enum as SQLEnum
+from sqlalchemy import String, Boolean, DateTime, Date, ForeignKey, UniqueConstraint, Index, Text, Enum as SQLEnum, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, IDMixin, TimestampMixin, SoftDeleteMixin
@@ -74,6 +74,9 @@ class StudentProfile(Base, IDMixin, TimestampMixin, SoftDeleteMixin):
     high_contrast: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_activity_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    current_streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    longest_streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_activity_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Relationships
     user: Mapped["User"] = relationship(back_populates="student_profile")

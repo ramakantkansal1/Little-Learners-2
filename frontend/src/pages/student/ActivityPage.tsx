@@ -2,7 +2,7 @@ import { Link, useParams, useLocation, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { studentApi, type AnswerSubmitResponse } from '@services/api';
-import { activityTypeRegistry, type ActivityTypeComponentProps } from '@/components/learning/ActivityRenderer';
+import { ActivityRenderer, type ActivityTypeComponentProps } from '@/components/learning/ActivityRenderer';
 import type { ActivityType } from '@/types';
 
 interface ActivityQuestion {
@@ -53,6 +53,11 @@ export default function ActivityPage() {
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [correctOptionIds, setCorrectOptionIds] = useState<number[]>([]);
+  const [lessonProgress, setLessonProgress] = useState<{
+    completion_percentage: number;
+    status: string;
+    last_activity_at: string | null;
+  } | null>(null);
 
   // Parse search params from location.search directly to ensure reactivity
   const searchParams = new URLSearchParams(location.search);
@@ -84,6 +89,25 @@ export default function ActivityPage() {
       setAttemptId(attemptIdToUse);
       
       const activityData = activityResponse.data.activity;
+      const responseData = activityResponse.data as { saved_progress?: { current_question_index?: number; selected_answer_id?: number; accumulated_score?: number }; lesson_progress?: { completion_percentage?: number; status?: string; last_activity_at?: string | null } };
+      const savedProgress = responseData.saved_progress;
+      const lp = responseData.lesson_progress;
+      
+      // Restore in-progress state from saved attempt metadata (resumption support)
+      if (savedProgress) {
+        setCurrentQuestion(savedProgress.current_question_index ?? 0);
+        setSelectedAnswer(savedProgress.selected_answer_id ?? null);
+        setScore(savedProgress.accumulated_score ?? 0);
+      }
+      
+      // Set lesson progress from backend
+      if (lp) {
+        setLessonProgress({
+          completion_percentage: lp.completion_percentage ?? 0,
+          status: lp.status ?? 'not_started',
+          last_activity_at: lp.last_activity_at ?? null,
+        });
+      }
       
       setActivity({
         id: activityData.id,
@@ -138,6 +162,15 @@ export default function ActivityPage() {
       if (answerResult.is_correct) setScore(prev => prev + 1);
       setCorrectOptionIds(answerResult.correct_options);
       setShowFeedback(true);
+      
+      // Update lesson progress from backend response
+      if (answerResult.lesson_progress) {
+        setLessonProgress({
+          completion_percentage: answerResult.lesson_progress.completion_percentage,
+          status: answerResult.lesson_progress.status,
+          last_activity_at: answerResult.lesson_progress.last_activity_at,
+        });
+      }
     } catch (err) {
       console.error('Failed to submit answer:', err);
       setShowFeedback(false);
@@ -254,9 +287,29 @@ export default function ActivityPage() {
     );
   }
 
-  // Get the activity type component from registry
-  const ActivityComponent = activityTypeRegistry.getComponent(activity.type);
-  
+  // Lesson progress banner
+  const progressDisplay = lessonProgress ? (
+    <div className="card p-4 mb-4">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-medium text-gray-700">Lesson Progress</span>
+        <span className="text-sm font-bold text-primary-600">{lessonProgress.completion_percentage}%</span>
+      </div>
+      <div className="w-full bg-gray-200 rounded-full h-2.5">
+        <div
+          className="bg-primary-600 h-2.5 rounded-full"
+          style={{ width: `${Math.min(100, Math.max(0, lessonProgress.completion_percentage))}%` }}
+        ></div>
+      </div>
+      <p className="text-xs text-gray-500 mt-2">
+        {lessonProgress.status === 'completed'
+          ? 'Lesson completed!'
+          : lessonProgress.status === 'in_progress'
+          ? 'In progress'
+          : 'Not started'}
+      </p>
+    </div>
+  ) : null;
+
   // Prepare props for the activity type component
   const activityProps: ActivityTypeComponentProps = {
     activity,
@@ -280,6 +333,11 @@ export default function ActivityPage() {
     error,
   };
 
-  // Render the activity type component
-  return <ActivityComponent {...activityProps} />;
+  // Render the activity type component via the ActivityRenderer dispatcher
+  return (
+    <>
+      {progressDisplay}
+      <ActivityRenderer {...activityProps} />
+    </>
+  );
 }

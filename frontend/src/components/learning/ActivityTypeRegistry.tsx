@@ -1,26 +1,14 @@
-import { ActivityType } from '@/types';
-import { ReactNode } from 'react';
-import type { ActivityTypeComponent, ActivityTypeComponentProps } from './ActivityTypeRegistry.types';
-import { ActivityTypeRegistry } from './ActivityTypeRegistry';
-
-// Singleton registry instance
-export const activityTypeRegistry = new ActivityTypeRegistry();
-
-/**
- * Get registry entry for an activity type.
- */
-export function getRegistryEntry(type: ActivityType): ActivityTypeRegistryEntry | undefined {
-  return activityTypeRegistry.get(type);
-}
+import type { ActivityTypeComponentProps } from './ActivityTypeRegistry.types';
+import { activityTypeRegistry } from './ActivityTypeRegistry';
 
 /**
  * Fallback component for unsupported activity types.
  * Displays a friendly message indicating the activity type is not yet supported.
  */
-export function UnsupportedActivityTypeComponent(props: ActivityTypeComponentProps): ReactNode {
+export function UnsupportedActivityTypeComponent(props: ActivityTypeComponentProps): React.ReactElement {
   const { activity, onRetry } = props;
   const registryEntry = activityTypeRegistry.get(activity.type);
-  
+
   return (
     <div className="card p-8 text-center">
       <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4 text-4xl">

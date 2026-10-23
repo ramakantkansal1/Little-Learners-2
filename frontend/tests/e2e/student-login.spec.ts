@@ -22,8 +22,10 @@ test.describe('Student Login', () => {
 
   test('should login successfully and navigate to dashboard', async ({ page }) => {
     // Fill in credentials
-    await page.fill('input[name="username"]', 'aarav_1');
-    await page.fill('input[name="pin"]', '1234');
+    const username = process.env.E2E_STUDENT_USERNAME || 'aarav_1';
+    const pin = process.env.E2E_STUDENT_PIN || '1234';
+    await page.fill('input[name="username"]', username);
+    await page.fill('input[name="pin"]', pin);
     
     // Click login button
     await page.click('button[type="submit"]');
@@ -38,7 +40,7 @@ test.describe('Student Login', () => {
   });
 
   test('should show error for invalid PIN', async ({ page }) => {
-    await page.fill('input[name="username"]', 'aarav_1');
+    await page.fill('input[name="username"]', process.env.E2E_STUDENT_USERNAME || 'aarav_1');
     await page.fill('input[name="pin"]', '0000');
     await page.click('button[type="submit"]');
     

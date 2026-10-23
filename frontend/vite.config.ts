@@ -25,7 +25,7 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api': {
-        target: 'http://backend:8000',
+        target: process.env.E2E_MODE === 'true' ? 'http://localhost:8000' : 'http://backend:8000',
         changeOrigin: true,
         secure: false,
         cookieDomainRewrite: 'localhost',

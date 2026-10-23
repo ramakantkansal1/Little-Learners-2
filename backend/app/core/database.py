@@ -17,13 +17,19 @@ from app.models.base import Base
 
 
 # Create async engine
+_is_sqlite = settings.database_url.startswith("sqlite")
+_engine_kwargs = {
+    "echo": settings.DEBUG,
+    "pool_pre_ping": True,
+    "pool_recycle": 3600,
+}
+if not _is_sqlite:
+    _engine_kwargs["pool_size"] = 10
+    _engine_kwargs["max_overflow"] = 20
+
 engine: AsyncEngine = create_async_engine(
     settings.database_url,
-    echo=settings.DEBUG,
-    pool_pre_ping=True,
-    pool_recycle=3600,
-    pool_size=10,
-    max_overflow=20,
+    **_engine_kwargs,
 )
 
 # Create async session factory

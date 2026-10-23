@@ -382,6 +382,49 @@ export interface ChildProgress {
   }>;
 }
 
+export interface ChildAnalytics {
+  child_id: number;
+  child_name: string;
+  stage_code: string;
+  stage_name: string;
+  total_lessons: number;
+  completed_lessons: number;
+  in_progress_lessons: number;
+  total_activities: number;
+  completed_activities: number;
+  total_time_spent_minutes: number;
+  average_score: number | null;
+  current_streak: number;
+  longest_streak: number;
+  last_activity_at: string | null;
+  daily_completions: Array<{
+    date: string;
+    count: number;
+    time_spent_minutes: number;
+  }>;
+  activity_detail: Array<{
+    activity_id: number;
+    activity_code: string;
+    activity_type: string;
+    attempts: number;
+    completed: number;
+    best_score: number | null;
+    time_spent_seconds: number;
+  }>;
+  rewards_earned: number;
+  rewards: Array<{
+    id: number;
+    code: string;
+    name: string;
+    description: string | null;
+    reward_type: string;
+    image_url: string | null;
+    points_value: number;
+    earned: boolean;
+    earned_at: string | null;
+  }>;
+}
+
 export const parentApi = {
   getMyProfile: () => 
     api.get<ParentProfile>('/parents/me'),
@@ -406,6 +449,9 @@ export const parentApi = {
   
   getChildRewards: (childId: number) => 
     api.get(`/parents/me/children/${childId}/rewards`),
+
+  getChildAnalytics: (childId: number) => 
+    api.get<ChildAnalytics>(`/parents/me/children/${childId}/analytics`),
 };
 
 // ===========================================
@@ -543,12 +589,24 @@ export interface AttemptStartResponse {
       display_order: number;
     }>;
   }>;
+  saved_progress?: { current_question_index?: number; selected_answer_id?: number; accumulated_score?: number } | null;
+  lesson_progress?: {
+    completion_percentage: number;
+    status: string;
+    last_activity_at: string | null;
+  } | null;
 }
 
 export interface AnswerSubmitResponse {
   is_correct: boolean;
   points_earned: number;
   correct_options: number[];
+  saved_progress?: { current_question_index?: number; selected_answer_id?: number; accumulated_score?: number } | null;
+  lesson_progress?: {
+    completion_percentage: number;
+    status: string;
+    last_activity_at: string | null;
+  } | null;
 }
 
 export interface AttemptCompleteResponse {

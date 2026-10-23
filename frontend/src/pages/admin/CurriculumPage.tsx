@@ -2,7 +2,9 @@ import { Plus, BookOpen, Edit, Trash2, Eye, ArrowLeft, X, Loader2, AlertTriangle
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { adminApi, curriculumApi, type AdminStage, type AdminLesson, type AdminActivity, type Subject, type ValidationErrorDetail } from '@services/api';
-import { activityTypeRegistry, type ActivityType, validateActivityConfig, getRegistryEntry } from '@components/learning/ActivityRenderer';
+import type { ActivityType } from '@/types';
+import { activityTypeRegistry, validateActivityConfig, getRegistryEntry, ensureActivityTypesRegistered } from '@components/learning/ActivityTypeRegistry';
+import '@components/learning/ActivityRenderer';
 
 type ContentType = 'stages' | 'subjects' | 'lessons' | 'activities';
 
@@ -237,6 +239,12 @@ export default function CurriculumPage() {
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
+
+  // Defensive: ensure the activity-type registry is populated even when this
+  // page is deep-linked without ActivityRenderer ever loading first.
+  useEffect(() => {
+    void ensureActivityTypesRegistered();
+  }, []);
 
   // Toggle row expansion
   const toggleRow = (id: number) => {

@@ -46,10 +46,11 @@
 
 | Item | Description | Impact | Resolution Target |
 |------|-------------|--------|-------------------|
-| DEF-001 | Playwright reload tests need extended timeouts due to auth re-validation in test env; **all 4 affected tests pass with timeouts applied** | Test infrastructure only | Phase 6 test hardening |
-| DEF-002 | ESLint fast-refresh warning (non-blocking) | Developer experience only | Phase 6 lint cleanup |
-| DEF-003 | No admin CRUD UI unit/integration tests | Regression risk | Phase 6 test hardening |
-| DEF-004 | No per-activity-type component tests | Regression risk | Phase 6 test hardening |
+| DEF-001 | Playwright reload tests need extended timeouts due to auth re-validation in test env; **all 4 affected tests pass with timeouts applied** | Test infrastructure only | **Resolved in Stage 0** — Root cause investigated; tests pass reliably across 5 consecutive runs |
+| DEF-002 | ESLint fast-refresh warning (non-blocking) | Developer experience only | **Resolved in Stage 0** — Extracted types/constants from ActivityRenderer; lint exits cleanly |
+| DEF-003 | No admin CRUD UI unit/integration tests | Regression risk | **Resolved in Stage 0** — Added CurriculumPage.test.tsx with 8 tests |
+| DEF-004 | No per-activity-type component tests | Regression risk | **Resolved in Stage 0** — Added PictureMatchingActivity.test.tsx with 8 tests |
+| — | Unregistered activity types (genuine defect) | Application defect | **Fixed in Stage 0** — All 15 activity types registered in ActivityRenderer.tsx |
 
 ---
 

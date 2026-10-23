@@ -6,13 +6,16 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import select, func
+from sqlalchemy import select, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.exceptions import NotFoundException, ValidationException, ConflictException
-from app.models import User, ParentProfile, StudentProfile, ParentStudentRelationship, UserPreference
+from app.models import (
+    User, ParentProfile, StudentProfile, ParentStudentRelationship, UserPreference,
+    ConsentRecord,
+)
 from app.permissions.dependencies import get_current_user, require_permission
 from app.permissions.roles import Permission
 
@@ -90,6 +93,36 @@ class ChildProgressResponse(BaseModel):
     average_score: Optional[float]
     rewards_earned: int
     recent_activity: List[dict]
+
+    class Config:
+        from_attributes = True
+
+
+class ChildAnalyticsResponse(BaseModel):
+    """Read-only analytics for a child's learning progress."""
+
+    child_id: int
+    child_name: str
+    stage_code: str
+    stage_name: str
+    # Overview
+    total_lessons: int
+    completed_lessons: int
+    in_progress_lessons: int
+    total_activities: int
+    completed_activities: int
+    total_time_spent_minutes: int
+    average_score: Optional[float]
+    current_streak: int
+    longest_streak: int
+    last_activity_at: Optional[str]
+    # Learning trends - daily completion counts
+    daily_completions: List[dict]
+    # Activity-level detail
+    activity_detail: List[dict]
+    # Rewards
+    rewards_earned: int
+    rewards: List[dict]
 
     class Config:
         from_attributes = True
@@ -782,3 +815,234 @@ async def get_child_rewards(
         "child_name": student.display_name,
         "rewards": result,
     }
+
+
+@router.get("/me/children/{child_id}/analytics", response_model=ChildAnalyticsResponse)
+async def get_child_analytics(
+    child_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get read-only learning analytics for a specific child (parent view).
+
+    Aggregates data from ActivityAttempt, StudentLessonProgress,
+    StudentRewardAward, and StudentProfile. Does not modify any state.
+    """
+    profile = await get_parent_profile(db, current_user.id)
+
+    # Verify child belongs to this parent with progress-view permission
+    rel_result = await db.execute(
+        select(ParentStudentRelationship)
+        .where(ParentStudentRelationship.parent_id == profile.id)
+        .where(ParentStudentRelationship.student_id == child_id)
+        .where(ParentStudentRelationship.can_view_progress == True)
+    )
+    relationship = rel_result.scalar_one_or_none()
+    if not relationship:
+        raise NotFoundException("Child not found or cannot view progress")
+
+    # Check analytics consent: active, not withdrawn
+    consent_result = await db.execute(
+        select(ConsentRecord)
+        .where(ConsentRecord.parent_id == profile.id)
+        .where(ConsentRecord.student_id == child_id)
+        .where(ConsentRecord.consent_type == "analytics")
+        .where(ConsentRecord.consent_given == True)
+        .where(ConsentRecord.withdrawn_at.is_(None))
+    )
+    consent = consent_result.scalar_one_or_none()
+    if not consent:
+        raise NotFoundException("Analytics not available - consent not given")
+
+    # Load student with stage
+    from app.models import StudentProfile, LearningStage, Lesson, StudentLessonProgress, Activity, StudentReward, Topic, Subject, ActivityAttempt, StudentRewardAward
+
+    student_result = await db.execute(
+        select(StudentProfile)
+        .where(StudentProfile.id == child_id)
+        .options(selectinload(StudentProfile.current_stage))
+    )
+    student = student_result.scalar_one_or_none()
+    if not student or student.is_deleted or not student.is_active:
+        raise NotFoundException("Child not found")
+
+    stage = student.current_stage
+
+    # --- Overview aggregates ---
+
+    # Total published lessons in child's stage
+    if stage:
+        total_lessons_result = await db.execute(
+            select(func.count(Lesson.id))
+            .join(Topic, Lesson.topic_id == Topic.id)
+            .join(Subject, Topic.subject_id == Subject.id)
+            .where(Subject.stage_id == stage.id)
+            .where(Lesson.status == "published")
+            .where(Lesson.is_active == True)
+        )
+        total_lessons = total_lessons_result.scalar() or 0
+    else:
+        total_lessons = 0
+
+    # Lesson progress counts
+    completed_result = await db.execute(
+        select(func.count(StudentLessonProgress.id))
+        .where(StudentLessonProgress.student_id == child_id)
+        .where(StudentLessonProgress.status == "completed")
+    )
+    completed_lessons = completed_result.scalar() or 0
+
+    in_progress_result = await db.execute(
+        select(func.count(StudentLessonProgress.id))
+        .where(StudentLessonProgress.student_id == child_id)
+        .where(StudentLessonProgress.status == "in_progress")
+    )
+    in_progress_lessons = in_progress_result.scalar() or 0
+
+    # Activity attempt stats (completed attempts only)
+    completed_activities_result = await db.execute(
+        select(func.count(ActivityAttempt.id))
+        .where(ActivityAttempt.student_id == child_id)
+        .where(ActivityAttempt.status == "completed")
+    )
+    completed_activities = completed_activities_result.scalar() or 0
+
+    total_activities_result = await db.execute(
+        select(func.count(ActivityAttempt.id))
+        .where(ActivityAttempt.student_id == child_id)
+    )
+    total_activities = total_activities_result.scalar() or 0
+
+    time_result = await db.execute(
+        select(func.sum(ActivityAttempt.time_spent_seconds))
+        .where(ActivityAttempt.student_id == child_id)
+        .where(ActivityAttempt.status == "completed")
+    )
+    total_time = time_result.scalar() or 0
+
+    score_result = await db.execute(
+        select(func.avg(ActivityAttempt.score))
+        .where(ActivityAttempt.student_id == child_id)
+        .where(ActivityAttempt.status == "completed")
+        .where(ActivityAttempt.score.is_not(None))
+    )
+    avg_score = score_result.scalar()
+
+    # Streak from student profile
+    current_streak = student.current_streak
+    longest_streak = student.longest_streak
+    last_activity_at = (
+        student.last_activity_at.isoformat() if student.last_activity_at else None
+    )
+
+    # --- Learning trends: daily completion counts ---
+    daily_completions_result = await db.execute(
+        select(
+            func.strftime("%Y-%m-%d", ActivityAttempt.completed_at).label("date"),
+            func.count(ActivityAttempt.id).label("count"),
+            func.sum(ActivityAttempt.time_spent_seconds).label("time_spent_seconds"),
+        )
+        .where(ActivityAttempt.student_id == child_id)
+        .where(ActivityAttempt.status == "completed")
+        .where(ActivityAttempt.completed_at.is_not(None))
+        .group_by(func.strftime("%Y-%m-%d", ActivityAttempt.completed_at))
+        .order_by(func.strftime("%Y-%m-%d", ActivityAttempt.completed_at))
+    )
+    daily_completions = [
+        {
+            "date": row[0],
+            "count": row[1],
+            "time_spent_minutes": int((row[2] or 0) // 60),
+        }
+        for row in daily_completions_result.all()
+    ]
+
+    # --- Activity-level detail ---
+    activity_detail_result = await db.execute(
+        select(
+            Activity.id,
+            Activity.code,
+            Activity.type,
+            func.count(ActivityAttempt.id).label("attempts"),
+            func.sum(
+                case(
+                    (ActivityAttempt.status == "completed", 1),
+                    else_=0,
+                )
+            ).label("completed"),
+            func.max(ActivityAttempt.score).label("best_score"),
+            func.sum(ActivityAttempt.time_spent_seconds).label("time_spent_seconds"),
+        )
+        .join(
+            ActivityAttempt,
+            ActivityAttempt.activity_id == Activity.id,
+        )
+        .where(ActivityAttempt.student_id == child_id)
+        .group_by(Activity.id, Activity.code, Activity.type)
+        .order_by(Activity.display_order)
+    )
+    activity_detail = [
+        {
+            "activity_id": row[0],
+            "activity_code": row[1],
+            "activity_type": row[2].value if hasattr(row[2], "value") else row[2],
+            "attempts": row[3] or 0,
+            "completed": row[4] or 0,
+            "best_score": row[5],
+            "time_spent_seconds": row[6] or 0,
+        }
+        for row in activity_detail_result.all()
+    ]
+
+    # --- Rewards ---
+    rewards_result = await db.execute(
+        select(StudentReward)
+        .where(StudentReward.is_active == True)
+        .order_by(StudentReward.display_order)
+    )
+    rewards = rewards_result.scalars().all()
+
+    rewards_list = []
+    rewards_earned_count = 0
+    for reward in rewards:
+        award_result = await db.execute(
+            select(StudentRewardAward)
+            .where(StudentRewardAward.student_id == student.id)
+            .where(StudentRewardAward.reward_id == reward.id)
+        )
+        award = award_result.scalar_one_or_none()
+        earned = award is not None
+        if earned:
+            rewards_earned_count += 1
+        rewards_list.append({
+            "id": reward.id,
+            "code": reward.code,
+            "name": reward.name,
+            "description": reward.description,
+            "reward_type": reward.reward_type,
+            "image_url": reward.image_url,
+            "points_value": reward.points_value,
+            "earned": earned,
+            "earned_at": award.earned_at.isoformat() if award else None,
+        })
+
+    return ChildAnalyticsResponse(
+        child_id=student.id,
+        child_name=student.display_name,
+        stage_code=stage.code if stage else "",
+        stage_name=stage.name if stage else "",
+        total_lessons=total_lessons,
+        completed_lessons=completed_lessons,
+        in_progress_lessons=in_progress_lessons,
+        total_activities=total_activities,
+        completed_activities=completed_activities,
+        total_time_spent_minutes=int(total_time // 60),
+        average_score=round(avg_score, 1) if avg_score else None,
+        current_streak=current_streak,
+        longest_streak=longest_streak,
+        last_activity_at=last_activity_at,
+        daily_completions=daily_completions,
+        activity_detail=activity_detail,
+        rewards_earned=rewards_earned_count,
+        rewards=rewards_list,
+    )
