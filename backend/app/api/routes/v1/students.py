@@ -25,12 +25,30 @@ from app.models import (
     StudentReward,
     StudentRewardAward,
     StudentLessonProgress,
-    ActivityTypeEnum
+    ActivityTypeEnum,
+    Topic,
+    Subject
 )
 from app.permissions.dependencies import get_current_user
 from app.permissions.roles import Permission
+from app.services.adaptive_learning import RecommendationService, RecommendationResult
 
 router = APIRouter(tags=["students"])
+
+
+# Request/Response Models for Stage 5D
+class NextActivityRecommendationResponse(BaseModel):
+    """Response model for next activity recommendation."""
+    activity_id: Optional[int]
+    reason: str
+    confidence: str
+    mastery_score: Optional[float]
+    tier: Optional[str]
+    has_evidence: bool
+    activity: Optional[ActivityDetailResponse] = None
+
+    class Config:
+        from_attributes = True
 
 
 # Request/Response Models
@@ -530,12 +548,15 @@ async def get_lesson_content(
     from app.models import Lesson, Activity, ActivityTranslation, Question, AnswerOption, StudentLessonProgress
     from app.models import LessonTranslation, Topic, Subject
     
-    # Verify lesson exists and is published
+    # Verify lesson exists, is published, and belongs to student's stage
     lesson_result = await db.execute(
         select(Lesson)
+        .join(Topic, Lesson.topic_id == Topic.id)
+        .join(Subject, Topic.subject_id == Subject.id)
         .where(Lesson.id == lesson_id)
         .where(Lesson.status == "published")
         .where(Lesson.is_active == True)
+        .where(Subject.stage_id == student.current_stage_id)
     )
     lesson = lesson_result.scalar_one_or_none()
     if not lesson:
@@ -1061,9 +1082,11 @@ async def complete_activity_attempt(
     student = await get_student_profile(db, current_user.id)
     
     from app.models import ActivityAttempt, ActivityResponse, StudentReward, StudentRewardAward, StudentLessonProgress, Activity
+    from sqlalchemy.orm import selectinload
     
     attempt_result = await db.execute(
         select(ActivityAttempt)
+        .options(selectinload(ActivityAttempt.activity))
         .where(ActivityAttempt.id == attempt_id)
         .where(ActivityAttempt.student_id == student.id)
     )
@@ -1358,6 +1381,205 @@ async def update_preferences(
     await db.commit()
     
     return {"message": "Preferences updated"}
+
+
+# Stage 5D: Next Activity Recommendation Endpoint
+
+@router.get("/me/next-activity", response_model=NextActivityRecommendationResponse)
+async def get_next_activity_recommendation(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get the next recommended activity for the current student.
+    
+    Uses the adaptive learning recommendation engine to determine the next
+    activity based on the student's mastery level, review schedule, and
+    curriculum progression.
+    
+    Returns:
+    - activity_id: ID of the recommended activity (null if no eligible activity)
+    - reason: Reason for the recommendation (e.g., "cold_start_sequence", "review_overdue", "remediate_repeat", "maintain_practice", "advance_next", "curriculum_sequence", "no_more_activities", "attempt_not_found", "activity_not_found", "lesson_not_found")
+    - confidence: Confidence level ("low", "medium", "high")
+    - mastery_score: Overall accuracy score (0-1) if sufficient evidence exists
+    - tier: Mastery tier ("cold_start", "remediate", "maintain", "advance")
+    - has_evidence: Whether there's sufficient attempt history for reliable recommendations
+    - activity: Full activity details if activity_id is present
+    """
+    student = await get_student_profile(db, current_user.id)
+    
+    recommendation_service = RecommendationService(db)
+    
+    # Strategy: Use the most recently completed attempt's activity as the anchor.
+    # If no completed attempts, we'll need to find a starting point.
+    
+    from app.models import ActivityAttempt
+    
+    # Find the most recent completed attempt
+    latest_attempt_result = await db.execute(
+        select(ActivityAttempt)
+        .where(ActivityAttempt.student_id == student.id)
+        .where(ActivityAttempt.status == "completed")
+        .order_by(ActivityAttempt.completed_at.desc().nullslast())
+        .limit(1)
+    )
+    latest_attempt = latest_attempt_result.scalar_one_or_none()
+    
+    if not latest_attempt:
+        # Cold start: no completed attempts yet
+        # Find the first activity in the student's current stage
+        recommendation_result = await _get_cold_start_recommendation(db, student, recommendation_service)
+        return await _build_recommendation_response(recommendation_result, db)
+    
+    # Use the latest completed activity as the anchor for recommendation
+    recommendation_result = await recommendation_service.recommend_next_activity(
+        student_id=student.id,
+        activity_id=latest_attempt.activity_id,
+    )
+    
+    return await _build_recommendation_response(recommendation_result, db)
+
+
+async def _get_cold_start_recommendation(
+    db: AsyncSession,
+    student: StudentProfile,
+    recommendation_service: RecommendationService,
+) -> RecommendationResult:
+    """Get a cold start recommendation for a student with no completed attempts."""
+    # Find the first activity in the student's current stage
+    from app.models import Activity, Lesson, Topic, Subject
+    
+    if not student.current_stage_id:
+        return RecommendationResult(
+            activity_id=None,
+            reason="no_stage_assigned",
+            confidence="low",
+            mastery_score=None,
+            tier="cold_start",
+            has_evidence=False,
+        )
+    
+    result = await db.execute(
+        select(Activity)
+        .join(Lesson, Activity.lesson_id == Lesson.id)
+        .join(Topic, Lesson.topic_id == Topic.id)
+        .join(Subject, Topic.subject_id == Subject.id)
+        .where(Subject.stage_id == student.current_stage_id)
+        .where(Activity.status == "published")
+        .where(Activity.is_active == True)
+        .order_by(Subject.display_order, Lesson.display_order, Activity.display_order)
+    )
+    activities = result.scalars().all()
+    
+    if not activities:
+        return RecommendationResult(
+            activity_id=None,
+            reason="no_activities_in_stage",
+            confidence="low",
+            mastery_score=None,
+            tier="cold_start",
+            has_evidence=False,
+        )
+    
+    # Return the first activity as cold start recommendation
+    first_activity = activities[0]
+    return RecommendationResult(
+        activity_id=first_activity.id,
+        reason="cold_start_sequence",
+        confidence="medium",
+        mastery_score=None,
+        tier="cold_start",
+        has_evidence=False,
+    )
+
+
+async def _build_recommendation_response(result: RecommendationResult, db: AsyncSession) -> NextActivityRecommendationResponse:
+    """Build the API response from a RecommendationResult."""
+    response = NextActivityRecommendationResponse(
+        activity_id=result.activity_id,
+        reason=result.reason,
+        confidence=result.confidence,
+        mastery_score=result.mastery_score,
+        tier=result.tier,
+        has_evidence=result.has_evidence,
+    )
+    
+    # If we have an activity_id, fetch the full activity details
+    if result.activity_id:
+        from app.models import Activity, Lesson
+        
+        activity_result = await db.execute(
+            select(Activity)
+            .options(selectinload(Activity.lesson).selectinload(Lesson.topic).selectinload(Topic.subject))
+            .where(Activity.id == result.activity_id)
+        )
+        activity = activity_result.scalar_one_or_none()
+        
+        if activity:
+            # Build activity detail response
+            # Get questions for this activity
+            from app.models import Question, AnswerOption
+            
+            questions_result = await db.execute(
+                select(Question)
+                .where(Question.activity_id == activity.id)
+                .where(Question.is_active == True)
+                .order_by(Question.display_order)
+            )
+            questions = questions_result.scalars().all()
+            
+            questions_data = []
+            for q in questions:
+                options_result = await db.execute(
+                    select(AnswerOption)
+                    .where(AnswerOption.question_id == q.id)
+                    .order_by(AnswerOption.display_order)
+                )
+                options = options_result.scalars().all()
+                
+                options_data = []
+                for opt in options:
+                    options_data.append({
+                        "id": opt.id,
+                        "text": opt.text,
+                        "image_url": opt.image_url,
+                        "is_correct": opt.is_correct,
+                        "display_order": opt.display_order,
+                    })
+                
+                questions_data.append({
+                    "id": q.id,
+                    "question_type": q.question_type,
+                    "prompt": q.prompt,
+                    "points": q.points,
+                    "display_order": q.display_order,
+                    "options": options_data,
+                })
+            
+            # Get activity translation
+            from app.models import ActivityTranslation
+            
+            trans_result = await db.execute(
+                select(ActivityTranslation).where(
+                    ActivityTranslation.activity_id == activity.id,
+                    ActivityTranslation.language == "en"
+                )
+            )
+            act_trans = trans_result.scalar_one_or_none()
+            
+            activity_detail = ActivityDetailResponse(
+                id=activity.id,
+                code=activity.code,
+                type=activity.type.value,
+                title=act_trans.title if act_trans else activity.code,
+                instructions=act_trans.instructions if act_trans else None,
+                estimated_duration_minutes=activity.estimated_duration_minutes,
+                configuration=activity.configuration,
+                questions=questions_data,
+            )
+            response.activity = activity_detail
+    
+    return response
 
 
 # Helper functions (preserved from current working version)
