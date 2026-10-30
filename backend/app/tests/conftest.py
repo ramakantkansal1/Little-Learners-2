@@ -32,10 +32,10 @@ def test_db_url():
     """Create a temporary database file and return its URL."""
     with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
         db_path = f.name
-    
+
     # Use async URL for async engines
     db_url = f"sqlite+aiosqlite:///{db_path}"
-    
+
     # Create tables using sync engine (avoids greenlet issues)
     sync_engine = create_engine(
         f"sqlite:///{db_path}",
@@ -43,7 +43,7 @@ def test_db_url():
         poolclass=StaticPool,
     )
     Base.metadata.create_all(sync_engine)
-    
+
     # Seed learning stages using sync engine
     from sqlalchemy.orm import sessionmaker
     SyncSession = sessionmaker(bind=sync_engine)
@@ -98,11 +98,11 @@ def test_db_url():
         for stage in stages:
             session.add(stage)
         session.commit()
-    
+
     sync_engine.dispose()
-    
+
     yield db_url
-    
+
     # Clean up
     try:
         os.unlink(db_path)
@@ -118,14 +118,14 @@ async def seeded_data(test_db_url):
     """
     from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
     from sqlalchemy.pool import StaticPool
-    
+
     engine = create_async_engine(
         test_db_url,
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
     async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    
+
     async with async_session() as session:
         # Learning stages are already seeded by test_db_url fixture
         from sqlalchemy import select
@@ -135,7 +135,7 @@ async def seeded_data(test_db_url):
             )
         )
         stages = list(stages_result.scalars().all())
-        
+
         # Subject, topic, lesson, activity
         subject = Subject(
             stage_id=stages[0].id, domain_id=1, code="english", name="English",
@@ -248,7 +248,7 @@ async def seeded_data(test_db_url):
             current_stage_id=stages[0].id,
         )
         session.add(student)
-        
+
         # Create parent profile
         parent_profile = ParentProfile(
             user_id=parent_user.id,
@@ -256,7 +256,7 @@ async def seeded_data(test_db_url):
             phone_number="+15551234567",
         )
         session.add(parent_profile)
-        
+
         await session.commit()
 
         # Debug: verify parent exists after commit
@@ -277,7 +277,7 @@ async def seeded_data(test_db_url):
             "q1_wrong_id": q1_wrong.id,
             "q2_correct_id": q2_correct.id,
         }
-    
+
     await engine.dispose()
     yield result
 
@@ -290,7 +290,7 @@ async def seeded_session(test_db_url):
     """
     from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
     from sqlalchemy.pool import StaticPool
-    
+
     engine = create_async_engine(
         test_db_url,
         connect_args={"check_same_thread": False},
@@ -298,13 +298,13 @@ async def seeded_session(test_db_url):
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
+
     async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with async_session() as session:
         # Seed minimal reference data for adaptive learning tests
         from app.models import LearningStage, LearningDomain, Subject, Topic, Lesson, Activity, ActivityTypeEnum, ContentStatusEnum
         from sqlalchemy import select
-        
+
         # Get existing learning stages (already seeded by test_db_url)
         stages_result = await session.execute(
             select(LearningStage).where(
@@ -312,34 +312,34 @@ async def seeded_session(test_db_url):
             )
         )
         stages = list(stages_result.scalars().all())
-        
+
         # Create learning domain
         domain = LearningDomain(stage_id=stages[0].id, code="language", name="Language", description="Language arts", display_order=1, icon="abc", color="#FFB3BA", is_active=True)
         session.add(domain)
         await session.flush()
-        
+
         # Create subject
         subject = Subject(stage_id=stages[0].id, domain_id=domain.id, code="english", name="English", display_order=1, icon="abc", color="#FFB3BA", is_active=True)
         session.add(subject)
         await session.flush()
-        
+
         # Create topic
         topic = Topic(subject_id=subject.id, code="letters", name="Letters", display_order=1, is_active=True)
         session.add(topic)
         await session.flush()
-        
+
         # Create lesson
         lesson = Lesson(topic_id=topic.id, code="lesson-001", status="published", version=1, is_active=True, display_order=1)
         session.add(lesson)
         await session.flush()
-        
+
         # Create activities
         activity_a = Activity(lesson_id=lesson.id, type=ActivityTypeEnum.PICTURE_MATCHING, code="activity-a", status="published", version=1, display_order=1, is_active=True)
         activity_b = Activity(lesson_id=lesson.id, type=ActivityTypeEnum.SIMPLE_QUIZ, code="activity-b", status="published", version=1, display_order=2, is_active=True)
         session.add(activity_a)
         session.add(activity_b)
         await session.flush()
-        
+
         # Create questions
         q1 = Question(activity_id=activity_a.id, question_type="single_choice", prompt="Question 1", display_order=1, points=10, is_active=True)
         q2 = Question(activity_id=activity_a.id, question_type="single_choice", prompt="Question 2", display_order=2, points=10, is_active=True)
@@ -348,18 +348,18 @@ async def seeded_session(test_db_url):
         session.add(q2)
         session.add(q3)
         await session.flush()
-        
+
         # Create answer options
         for q in [q1, q2, q3]:
             opt_correct = AnswerOption(question_id=q.id, text="Correct", is_correct=True, display_order=1)
             opt_wrong = AnswerOption(question_id=q.id, text="Wrong", is_correct=False, display_order=2)
             session.add(opt_correct)
             session.add(opt_wrong)
-        
+
         await session.commit()
-        
+
         yield session
-    
+
     await engine.dispose()
 
 
@@ -368,7 +368,7 @@ async def test_session(test_db_url):
     """Create a test session using the pre-seeded test database."""
     from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
     from sqlalchemy.pool import StaticPool
-    
+
     engine = create_async_engine(
         test_db_url,
         connect_args={"check_same_thread": False},
@@ -377,7 +377,7 @@ async def test_session(test_db_url):
     async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with async_session() as session:
         yield session
-    
+
     await engine.dispose()
 
 
@@ -405,9 +405,9 @@ async def client(test_db_url):
     from app.main import create_app
     from app.core.database import get_db
     from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-    
+
     app = create_app()
-    
+
     async def override_get_db():
         # Create a new async engine and session for each request
         # test_db_url is already in the format sqlite+aiosqlite:///...
@@ -427,12 +427,100 @@ async def client(test_db_url):
                 raise
             finally:
                 await request_engine.dispose()
-    
+
     app = create_app()
     app.dependency_overrides[get_db] = override_get_db
-    
+
     from httpx import AsyncClient, ASGITransport
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as ac:
         yield ac
-    
+
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="function")
+async def admin_client(test_db_url):
+    """Create a test client authenticated as admin."""
+    from app.main import create_app
+    from app.core.database import get_db
+    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+    from sqlalchemy.pool import StaticPool
+    from app.models import User, Role, UserRole
+    from app.core.security import get_password_hash
+
+    # Create admin user in the database
+    sync_db_url = test_db_url.replace('sqlite+aiosqlite://', 'sqlite://')
+    sync_engine = create_engine(
+        sync_db_url,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    from sqlalchemy.orm import sessionmaker
+    SyncSession = sessionmaker(bind=sync_engine)
+
+    with SyncSession() as session:
+        # Create admin user
+        admin_user = User(
+            email="admin@example.com",
+            password_hash=get_password_hash("Test@123"),
+            is_active=True, is_verified=True,
+        )
+        session.add(admin_user)
+        session.flush()
+
+        # Create admin role
+        admin_role = Role(name="admin", description="Admin role", is_system=True)
+        session.add(admin_role)
+        session.flush()
+
+        session.add(UserRole(user_id=admin_user.id, role_id=admin_role.id))
+        session.commit()
+
+    sync_engine.dispose()
+
+    # Create app with overridden get_db
+    app = create_app()
+
+    async def override_get_db():
+        async_db_url = test_db_url
+        if not test_db_url.startswith('sqlite+aiosqlite://'):
+            if test_db_url.startswith('sqlite://'):
+                async_db_url = test_db_url.replace('sqlite://', 'sqlite+aiosqlite://')
+            else:
+                async_db_url = test_db_url
+        request_engine = create_async_engine(
+            async_db_url,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        request_session = async_sessionmaker(request_engine, class_=AsyncSession, expire_on_commit=False)
+        async with request_session() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+            finally:
+                await request_engine.dispose()
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    from httpx import AsyncClient, ASGITransport
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as ac:
+        # Login as admin
+        csrf_response = await ac.get("/api/v1/auth/csrf-token")
+        csrf_token = csrf_response.json()["csrf_token"]
+
+        await ac.post(
+            "/api/v1/auth/parent/login",
+            json={"email": "admin@example.com", "password": "Test@123"},
+            headers={"X-CSRF-Token": csrf_token},
+        )
+
+        # Get fresh CSRF token after login
+        csrf_response2 = await ac.get("/api/v1/auth/csrf-token")
+        ac.csrf_token = csrf_response2.json()["csrf_token"]
+        yield ac
+
     app.dependency_overrides.clear()

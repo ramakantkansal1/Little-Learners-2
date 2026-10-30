@@ -62,7 +62,7 @@ ACTIVITY_CONFIGS = {
 async def update_activities_batch(db):
     """Update activities using bulk SQL updates for efficiency."""
     from app.models import Lesson, Topic, Subject, LearningStage
-    
+
     # Get all published lessons with their stages
     lessons_result = await db.execute(
         select(Lesson.id, Lesson.topic_id, LearningStage.code)
@@ -73,14 +73,14 @@ async def update_activities_batch(db):
         .order_by(Lesson.id)
     )
     lessons = lessons_result.all()
-    
+
     print(f"Found {len(lessons)} published lessons")
-    
+
     # Get all activities for these lessons
     lesson_ids = [l.id for l in lessons]
     if not lesson_ids:
         return 0
-    
+
     # Get all activities for these lessons
     acts_result = await db.execute(
         select(Activity.id, Activity.lesson_id, Activity.display_order)
@@ -89,9 +89,9 @@ async def update_activities_batch(db):
         .order_by(Activity.lesson_id, Activity.display_order)
     )
     activities = acts_result.all()
-    
+
     print(f"Found {len(activities)} activities to update")
-    
+
     # Bulk update activities
     if activities:
         for batch in [activities[i:i+100] for i in range(0, len(activities), 100)]:
@@ -101,7 +101,7 @@ async def update_activities_batch(db):
                 # We need to get the stage code for this lesson
                 # For simplicity, we'll cycle through all 15 types
                 new_type = ALL_ACTIVITY_TYPES[idx % len(ALL_ACTIVITY_TYPES)]
-                
+
                 await db.execute(
                     update(Activity)
                     .where(Activity.id == act_id)
@@ -112,23 +112,23 @@ async def update_activities_batch(db):
                     )
                 )
             await db.commit()
-    
+
     print(f"Updated {len(activities)} activities")
     return len(activities)
 
 
 async def validate_all_lessons(db):
     from app.models import Lesson
-    
+
     lessons_result = await db.execute(
         select(Lesson).where(Lesson.status == ContentStatusEnum.PUBLISHED)
     )
     lessons = lessons_result.scalars().all()
-    
+
     print(f"\nValidating {len(lessons)} published lessons...")
     passed = 0
     failed = 0
-    
+
     for lesson in lessons:
         result = await validate_lesson_for_publish(db, lesson.id)
         if result.valid:
@@ -139,7 +139,7 @@ async def validate_all_lessons(db):
                 print(f"  Lesson {lesson.code} (ID: {lesson.id}) FAILED:")
                 for err in result.errors[:3]:
                     print(f"    - {err['field']}: {err['message']}")
-    
+
     print(f"\nValidation Results: {passed} passed, {failed} failed")
     return failed == 0
 
@@ -147,12 +147,12 @@ async def validate_all_lessons(db):
 async def main():
     print("Starting activity type migration for Stage 5D...")
     print(f"Database: {settings.database_url}")
-    
+
     async with async_session_factory() as db:
         try:
             updated = await update_activities_batch(db)
             print(f"Activities updated: {updated}")
-            
+
             all_valid = await validate_all_lessons(db)
             if all_valid:
                 print("\n✅ All lessons pass validation!")

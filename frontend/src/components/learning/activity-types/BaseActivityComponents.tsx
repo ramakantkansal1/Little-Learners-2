@@ -1,4 +1,5 @@
 import { ActivityTypeComponentProps } from '../ActivityRenderer';
+import { NextActivityRecommendation } from '../ActivityTypeRegistry.types';
 
 /**
  * Base component props for all activity type components.
@@ -222,7 +223,7 @@ export function renderNavigation({
         <button
           onClick={onNext}
           className="btn btn-primary"
-          disabled={currentQuestion === totalQuestions - 1 || submitting}
+          disabled={submitting}
         >
           {currentQuestion === totalQuestions - 1 ? 'Finish' : 'Next'}
           <svg className="w-5 h-5 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -245,6 +246,12 @@ export function renderCompletionScreen({
   onBack,
   onRetry,
   loading,
+  // Recommendation props
+  recommendation,
+  recommendationLoading,
+  recommendationError,
+  startingRecommended,
+  onStartRecommended,
 }: {
   activity: BaseActivityComponentProps['activity'];
   score: number;
@@ -253,6 +260,11 @@ export function renderCompletionScreen({
   onBack: () => void;
   onRetry: () => void;
   loading: boolean;
+  recommendation?: NextActivityRecommendation | null;
+  recommendationLoading?: boolean;
+  recommendationError?: string | null;
+  startingRecommended?: boolean;
+  onStartRecommended?: () => void;
 }): React.ReactElement {
   return (
     <div className="space-y-6">
@@ -311,6 +323,15 @@ export function renderCompletionScreen({
           </button>
         </div>
       </div>
+
+      {/* Next Activity Recommendation */}
+      {renderRecommendationCard({
+        recommendation,
+        recommendationLoading,
+        recommendationError,
+        startingRecommended,
+        onStartRecommended,
+      })}
     </div>
   );
 }
@@ -356,6 +377,234 @@ export function renderError({
         <p className="text-gray-600 mb-6">{error}</p>
         <button onClick={onRetry} className="btn btn-primary">
           Try Again
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Render the recommendation reason as a human-readable label.
+ */
+function getRecommendationReasonLabel(reason: string): string {
+  switch (reason) {
+    case 'cold_start_sequence':
+      return 'Starting your learning journey';
+    case 'review_overdue':
+      return 'Time to review what you learned';
+    case 'remediate_repeat':
+      return "Let's practice this a bit more";
+    case 'maintain_practice':
+      return 'Keep up the great work';
+    case 'advance_next':
+      return 'Ready for the next challenge';
+    case 'curriculum_sequence':
+      return 'Next in your curriculum';
+    case 'no_more_activities':
+      return 'No more activities available';
+    case 'no_stage_assigned':
+      return 'Please set your learning stage';
+    case 'no_activities_in_stage':
+      return 'No activities in this stage yet';
+    default:
+      return 'Recommended for you';
+  }
+}
+
+/**
+ * Render the mastery tier as a human-readable label.
+ */
+function getTierLabel(tier: string | null): string {
+  switch (tier) {
+    case 'cold_start':
+      return 'Getting Started';
+    case 'remediate':
+      return 'Practice More';
+    case 'maintain':
+      return 'Maintain Skills';
+    case 'advance':
+      return 'Advancing';
+    default:
+      return 'Learning';
+  }
+}
+
+/**
+ * Render the confidence as a human-readable label.
+ */
+function getConfidenceLabel(confidence: string): string {
+  switch (confidence) {
+    case 'high':
+      return 'High confidence';
+    case 'medium':
+      return 'Good match';
+    case 'low':
+      return 'Suggested';
+    default:
+      return '';
+  }
+}
+
+/**
+ * Render the recommendation card for the completion screen.
+ */
+export function renderRecommendationCard({
+  recommendation,
+  recommendationLoading,
+  recommendationError,
+  startingRecommended,
+  onStartRecommended,
+}: {
+  recommendation: NextActivityRecommendation | null | undefined;
+  recommendationLoading?: boolean;
+  recommendationError?: string | null;
+  startingRecommended?: boolean;
+  onStartRecommended?: () => void;
+}): React.ReactElement | null {
+  // If there's an error fetching recommendation, show a subtle message but don't block
+  if (recommendationError && !recommendation) {
+    return (
+      <div className="card p-4 border-yellow-200 bg-yellow-50">
+        <div className="flex items-center gap-3">
+          <svg className="w-5 h-5 text-yellow-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77-1.333.192 3 1.732 3z" />
+          </svg>
+          <p className="text-sm text-yellow-800">{recommendationError}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If no recommendation or no activity_id, show "no more activities" message
+  if (!recommendation || !recommendation.activity_id) {
+    return (
+      <div className="card p-6 text-center">
+        <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+          <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">You've finished the available activities for now</h3>
+        <p className="text-gray-600 mb-4">Great job completing this activity! Check back later for more content.</p>
+        <button onClick={() => window.history.back()} className="btn btn-secondary">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to Lesson
+        </button>
+      </div>
+    );
+  }
+
+  // If loading recommendation, show skeleton
+  if (recommendationLoading) {
+    return (
+      <div className="card p-6">
+        <div className="animate-pulse space-y-4">
+          <div className="h-6 bg-gray-200 rounded w-3/4"></div>
+          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+          <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+        </div>
+      </div>
+    );
+  }
+
+  const rec = recommendation!;
+  const activity = rec.activity;
+
+  // Show error banner if there's a start attempt error
+  const errorBanner = recommendationError ? (
+    <div className="card p-4 border-red-200 bg-red-50 mb-4">
+      <div className="flex items-center gap-3">
+        <svg className="w-5 h-5 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <p className="text-sm text-red-800">{recommendationError}</p>
+      </div>
+    </div>
+  ) : null;
+
+  return (
+    <div className="card p-6 border-primary-200 bg-gradient-to-br from-primary-50 to-pastel-blue">
+      {errorBanner}
+      <div className="flex items-start gap-4 mb-4">
+        <div className="w-12 h-12 rounded-xl bg-primary-100 flex items-center justify-center flex-shrink-0">
+          <svg className="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+          </svg>
+        </div>
+        <div className="flex-1">
+          <h3 className="text-lg font-semibold text-gray-900">Next Recommended Activity</h3>
+          <p className="text-sm text-gray-600">{getRecommendationReasonLabel(rec.reason)}</p>
+        </div>
+        <span className="badge badge-primary badge-sm">{getTierLabel(rec.tier)}</span>
+      </div>
+
+      {activity && (
+        <div className="card p-4 bg-white/50 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+              {activity.type === 'picture_matching' && <span className="text-2xl">🖼️</span>}
+              {activity.type === 'simple_quiz' && <span className="text-2xl">❓</span>}
+              {activity.type === 'color_identification' && <span className="text-2xl">🎨</span>}
+              {activity.type === 'shape_matching' && <span className="text-2xl">🔷</span>}
+              {activity.type === 'alphabet_recognition' && <span className="text-2xl">🔤</span>}
+              {activity.type === 'number_recognition' && <span className="text-2xl">🔢</span>}
+              {activity.type === 'counting' && <span className="text-2xl">🐘</span>}
+              {activity.type === 'sorting' && <span className="text-2xl">📦</span>}
+              {activity.type === 'sequencing' && <span className="text-2xl">🔢</span>}
+              {activity.type === 'tracing' && <span className="text-2xl">✏️</span>}
+              {activity.type === 'letter_sound' && <span className="text-2xl">🔊</span>}
+              {activity.type === 'story_listening' && <span className="text-2xl">📖</span>}
+              {activity.type === 'audio_identification' && <span className="text-2xl">🔊</span>}
+              {activity.type === 'picture_comprehension' && <span className="text-2xl">🖼️</span>}
+              {activity.type === 'image_selection' && <span className="text-2xl">🖼️</span>}
+              {!['picture_matching','simple_quiz','color_identification','shape_matching','alphabet_recognition','number_recognition','counting','sorting','sequencing','tracing','letter_sound','story_listening','audio_identification','picture_comprehension','image_selection'].includes(activity.type) && (
+                <span className="text-2xl">📚</span>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="font-medium text-gray-900 truncate">{activity.title || activity.code}</h4>
+              <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
+                {activity.estimated_duration_minutes && (
+                  <span className="flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {activity.estimated_duration_minutes} min
+                  </span>
+                )}
+                <span className="capitalize">{activity.type.replace(/_/g, ' ')}</span>
+              </div>
+            </div>
+            <span className="text-sm text-gray-500">{getConfidenceLabel(rec.confidence)}</span>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col sm:flex-row gap-3 justify-center">
+        <button
+          onClick={onStartRecommended}
+          disabled={startingRecommended || !activity}
+          className="btn btn-primary flex-1"
+        >
+          {startingRecommended ? (
+            <>
+              <svg className="w-5 h-5 animate-spin mr-2" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              Starting...
+            </>
+          ) : (
+            'Start This Activity'
+          )}
+        </button>
+        <button onClick={() => window.history.back()} className="btn btn-secondary flex-1">
+          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to Lesson
         </button>
       </div>
     </div>

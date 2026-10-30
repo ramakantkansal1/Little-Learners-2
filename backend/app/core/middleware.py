@@ -90,7 +90,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         """Get CORS headers for error responses based on request origin."""
         origin = request.headers.get("origin")
         allowed_origins = settings.CORS_ORIGINS
-        
+
         if origin and origin in allowed_origins:
             return {
                 "Access-Control-Allow-Origin": origin,
@@ -103,7 +103,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Skip rate limiting for health checks, CSRF token endpoint, and OPTIONS preflight requests
         if (
-            request.url.path.startswith("/api/v1/health") 
+            request.url.path.startswith("/api/v1/health")
             or request.url.path == "/api/v1/auth/csrf-token"
             or request.method == "OPTIONS"
         ):
@@ -116,7 +116,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Determine rate limit based on path and environment
         # Use more permissive limits in development for easier testing
         is_development = settings.APP_ENV == "development"
-        
+
         # Separate rate limits for different auth endpoints
         # Use different counter keys for different path types to avoid cross-contamination
         if request.url.path == "/api/v1/auth/student/login" or request.url.path == "/api/v1/auth/parent/login":

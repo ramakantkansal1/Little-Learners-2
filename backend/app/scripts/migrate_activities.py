@@ -101,7 +101,7 @@ STAGE_ACTIVITY_TYPES = {
 
 async def update_activities(db: AsyncSession):
     """Update existing activities to use all 15 activity types."""
-    
+
     # Get all published lessons with their stages
     lessons_result = await db.execute(
         select(Lesson)
@@ -109,12 +109,12 @@ async def update_activities(db: AsyncSession):
         .order_by(Lesson.id)
     )
     lessons = lessons_result.scalars().all()
-    
+
     print(f"Found {len(lessons)} published lessons")
-    
+
     # Get stage for each lesson
     from app.models import Topic, Subject, LearningStage
-    
+
     updated_count = 0
     for lesson in lessons:
         # Get stage code
@@ -122,19 +122,19 @@ async def update_activities(db: AsyncSession):
         topic = topic_result.scalar_one_or_none()
         if not topic:
             continue
-            
+
         subject_result = await db.execute(select(Subject).where(Subject.id == topic.subject_id))
         subject = subject_result.scalar_one_or_none()
         if not subject:
             continue
-            
+
         stage_result = await db.execute(select(LearningStage).where(LearningStage.id == subject.stage_id))
         stage = stage_result.scalar_one_or_none()
         if not stage:
             continue
-        
+
         stage_code = stage.code
-        
+
         # Get activities for this lesson
         acts_result = await db.execute(
             select(Activity)
@@ -143,38 +143,38 @@ async def update_activities(db: AsyncSession):
             .order_by(Activity.display_order)
         )
         activities = acts_result.scalars().all()
-        
+
         if not activities:
             continue
-        
+
         # Get appropriate activity types for this stage
         stage_types = STAGE_ACTIVITY_TYPES.get(stage_code, [
             ActivityTypeEnum.IMAGE_SELECTION,
             ActivityTypeEnum.PICTURE_MATCHING,
             ActivityTypeEnum.SIMPLE_QUIZ,
         ])
-        
+
         # Assign activity types cyclically to ensure diversity
         for idx, activity in enumerate(activities):
             new_type = stage_types[idx % len(stage_types)]
             config = ACTIVITY_TYPE_CONFIGS.get(new_type, {})
-            
+
             # Update activity type and configuration
             activity.type = new_type
             activity.configuration = config
             activity.updated_at = datetime.now(timezone.utc)
-            
+
             # Update activity translations
             act_trans_result = await db.execute(
                 select(ActivityTranslation).where(ActivityTranslation.activity_id == activity.id)
             )
             translations = act_trans_result.scalars().all()
-            
+
             for trans in translations:
                 type_name = new_type.value.replace('_', ' ').title()
                 trans.title = f"Activity {activity.display_order}: {type_name}" if trans.language == "en" else f"गतिविधि {activity.display_order}: {type_name}"
                 trans.instructions = f"Complete this {type_name.lower()} activity" if trans.language == "en" else f"यह {type_name.lower()} गतिविधि पूरी करें"
-            
+
             # Update questions with proper templates
             questions_result = await db.execute(
                 select(Question)
@@ -183,24 +183,24 @@ async def update_activities(db: AsyncSession):
                 .order_by(Question.display_order)
             )
             questions = questions_result.scalars().all()
-            
+
             for q_idx, question in enumerate(questions):
                 # Update question type based on activity type
                 question.question_type = get_question_type(new_type)
                 question.updated_at = datetime.now(timezone.utc)
-                
+
                 # Update question translations
                 q_trans_result = await db.execute(
                     select(QuestionTranslation).where(QuestionTranslation.question_id == question.id)
                 )
                 q_translations = q_trans_result.scalars().all()
-                
+
                 templates = QUESTION_TEMPLATES.get(new_type, QUESTION_TEMPLATES[ActivityTypeEnum.SIMPLE_QUIZ])
                 template = templates[q_idx % len(templates)]
-                
+
                 for trans in q_translations:
                     trans.prompt = template.get(trans.language, template["en"])
-                
+
                 # Update answer options
                 options_result = await db.execute(
                     select(AnswerOption)
@@ -208,28 +208,28 @@ async def update_activities(db: AsyncSession):
                     .order_by(AnswerOption.display_order)
                 )
                 options = options_result.scalars().all()
-                
+
                 content = get_activity_content(new_type, stage_code=subject.code if hasattr(subject, 'code') else 'nursery')
                 correct_idx = content.get("correct", 0) if content else 0
-                
+
                 for o_idx, option in enumerate(options):
                     option.text = get_option_text(new_type, content, o_idx, o_idx == 0)
                     option.is_correct = (o_idx == 0)
                     option.updated_at = datetime.now(timezone.utc)
-                    
+
                     # Update option translations
                     opt_trans_result = await db.execute(
                         select(AnswerOptionTranslation).where(AnswerOptionTranslation.answer_option_id == option.id)
                     )
                     opt_translations = opt_trans_result.scalars().all()
-                    
+
                     for trans in opt_translations:
                         trans.text = option.text if trans.language == "en" else f"विकल्प {option.display_order}"
                         trans.feedback_correct = "Great job!" if trans.language == "en" else "बहुत बढ़िया!"
                         trans.feedback_incorrect = "Try again!" if trans.language == "en" else "फिर कोशिश करें!"
-            
+
             updated_count += 1
-    
+
     await db.commit()
     print(f"Updated {updated_count} activities across {len(lessons)} lessons")
     return updated_count
@@ -284,7 +284,7 @@ def get_option_text(atype: ActivityTypeEnum, content: Dict[str, Any], index: int
     """Generate option text based on activity type and content."""
     if content and "options" in content and index < len(content["options"]):
         return content["options"][index]
-    
+
     # Default options per activity type
     defaults = {
         ActivityTypeEnum.IMAGE_SELECTION: ["Option A", "Option B", "Option C"],
@@ -373,16 +373,16 @@ QUESTION_TEMPLATES = {
 async def validate_all_lessons(db: AsyncSession):
     """Validate all published lessons using the validation service."""
     from app.models import Lesson
-    
+
     lessons_result = await db.execute(
         select(Lesson).where(Lesson.status == ContentStatusEnum.PUBLISHED)
     )
     lessons = lessons_result.scalars().all()
-    
+
     print(f"\nValidating {len(lessons)} published lessons...")
     passed = 0
     failed = 0
-    
+
     for lesson in lessons:
         result = await validate_lesson_for_publish(db, lesson.id)
         if result.valid:
@@ -392,7 +392,7 @@ async def validate_all_lessons(db: AsyncSession):
             print(f"  Lesson {lesson.code} (ID: {lesson.id}) FAILED:")
             for err in result.errors:
                 print(f"    - {err['field']}: {err['message']}")
-    
+
     print(f"\nValidation Results: {passed} passed, {failed} failed")
     return failed == 0
 
@@ -400,12 +400,12 @@ async def validate_all_lessons(db: AsyncSession):
 async def main():
     print("Starting activity type migration for Stage 5D...")
     print(f"Database: {settings.database_url}")
-    
+
     async with async_session_factory() as db:
         try:
             await update_activities(db)
             print("Activities updated successfully!")
-            
+
             # Run validation
             all_valid = await validate_all_lessons(db)
             if all_valid:

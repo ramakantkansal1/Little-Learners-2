@@ -33,6 +33,41 @@ export type ActivityTypeComponent = (props: ActivityTypeComponentProps) => React
  * Props passed to all activity type components.
  * Contains the activity data, current question, and callback handlers.
  */
+export interface NextActivityRecommendation {
+  activity_id: number | null;
+  reason: string;
+  confidence: string;
+  mastery_score: number | null;
+  tier: string | null;
+  has_evidence: boolean;
+  activity: {
+    id: number;
+    code: string;
+    type: string;
+    title: string;
+    instructions: string | null;
+    estimated_duration_minutes: number | null;
+    configuration: Record<string, unknown> | null;
+    questions: Array<{
+      id: number;
+      question_type: string;
+      prompt: string;
+      prompt_audio_url: string | null;
+      display_order: number;
+      points: number;
+      configuration: Record<string, unknown> | null;
+      options: Array<{
+        id: number;
+        text: string;
+        text_audio_url: string | null;
+        image_url: string | null;
+        display_order: number;
+        configuration?: Record<string, unknown>;
+      }>;
+    }>;
+  } | null;
+}
+
 export interface ActivityTypeComponentProps {
   /** The full activity data including questions and options */
   activity: {
@@ -97,4 +132,14 @@ export interface ActivityTypeComponentProps {
   submitting: boolean;
   /** Error message if any */
   error: string | null;
+  /** Next activity recommendation (shown on completion) */
+  recommendation?: NextActivityRecommendation | null;
+  /** Whether recommendation is being fetched */
+  recommendationLoading?: boolean;
+  /** Error fetching recommendation */
+  recommendationError?: string | null;
+  /** Whether a recommended activity is being started */
+  startingRecommended?: boolean;
+  /** Callback to start the recommended activity */
+  onStartRecommended?: () => void;
 }

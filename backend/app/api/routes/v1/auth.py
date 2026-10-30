@@ -605,7 +605,7 @@ async def get_csrf_token(response: Response):
         cookie_secure = False
         cookie_samesite = "lax"
         cookie_domain = None  # Don't set domain for localhost
-    
+
     response.set_cookie(
         key="csrf_token",
         value=csrf_token,

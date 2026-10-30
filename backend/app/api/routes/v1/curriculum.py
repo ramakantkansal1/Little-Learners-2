@@ -282,7 +282,7 @@ async def list_lessons(
 ):
     """List lessons with filters and translations."""
     from app.models import LessonTranslation, Topic, Subject
-    
+
     query = (
         select(Lesson, Topic, Subject, LessonTranslation)
         .join(Topic, Lesson.topic_id == Topic.id)
@@ -296,7 +296,7 @@ async def list_lessons(
         )
         .order_by(Subject.display_order, Topic.display_order, Lesson.display_order)
     )
-    
+
     if active_only:
         query = query.where(Lesson.is_active == True)
     if status:
@@ -307,11 +307,11 @@ async def list_lessons(
         query = query.where(Topic.subject_id == subject_id)
     elif stage_id:
         query = query.where(Subject.stage_id == stage_id)
-    
+
     query = query.limit(limit).offset(offset)
-    
+
     result = await db.execute(query)
-    
+
     lessons = []
     for lesson, topic, subject, translation in result.all():
         lessons.append(LessonResponse(
@@ -330,7 +330,7 @@ async def list_lessons(
             description=translation.description if translation else None,
             translated_instructions=translation.instructions if translation else lesson.instructions,
         ))
-    
+
     return lessons
 
 
@@ -342,7 +342,7 @@ async def get_lesson(
 ):
     """Get a specific lesson with translation."""
     from app.models import LessonTranslation, Topic, Subject
-    
+
     result = await db.execute(
         select(Lesson, Topic, Subject, LessonTranslation)
         .join(Topic, Lesson.topic_id == Topic.id)
@@ -359,7 +359,7 @@ async def get_lesson(
     row = result.first()
     if not row:
         raise NotFoundException("Lesson not found")
-    
+
     lesson, topic, subject, translation = row
     return LessonResponse(
         id=lesson.id,
@@ -388,7 +388,7 @@ async def list_lesson_activities(
 ):
     """List activities for a lesson with translations."""
     from app.models import ActivityTranslation
-    
+
     # Verify lesson exists
     lesson_result = await db.execute(
         select(Lesson).where(Lesson.id == lesson_id)
@@ -396,7 +396,7 @@ async def list_lesson_activities(
     lesson = lesson_result.scalar_one_or_none()
     if not lesson:
         raise NotFoundException("Lesson not found")
-    
+
     query = (
         select(Activity, ActivityTranslation)
         .outerjoin(
@@ -409,12 +409,12 @@ async def list_lesson_activities(
         .where(Activity.lesson_id == lesson_id)
         .order_by(Activity.display_order)
     )
-    
+
     if active_only:
         query = query.where(Activity.is_active == True)
-    
+
     result = await db.execute(query)
-    
+
     activities = []
     for activity, translation in result.all():
         activities.append(ActivityResponse(
@@ -432,7 +432,7 @@ async def list_lesson_activities(
             title=translation.title if translation else activity.code,
             translated_instructions=translation.instructions if translation else activity.instructions,
         ))
-    
+
     return activities
 
 
@@ -447,7 +447,7 @@ async def list_activities(
 ):
     """List activities with filters."""
     from app.models import ActivityTranslation
-    
+
     query = (
         select(Activity, ActivityTranslation)
         .outerjoin(
@@ -459,7 +459,7 @@ async def list_activities(
         )
         .order_by(Activity.lesson_id, Activity.display_order)
     )
-    
+
     if active_only:
         query = query.where(Activity.is_active == True)
     if lesson_id:
@@ -468,9 +468,9 @@ async def list_activities(
         query = query.where(Activity.type == activity_type)
     if status:
         query = query.where(Activity.status == status)
-    
+
     result = await db.execute(query)
-    
+
     activities = []
     for activity, translation in result.all():
         activities.append(ActivityResponse(
@@ -488,7 +488,7 @@ async def list_activities(
             title=translation.title if translation else activity.code,
             translated_instructions=translation.instructions if translation else activity.instructions,
         ))
-    
+
     return activities
 
 
@@ -500,7 +500,7 @@ async def get_activity(
 ):
     """Get a specific activity with translation."""
     from app.models import ActivityTranslation
-    
+
     result = await db.execute(
         select(Activity, ActivityTranslation)
         .outerjoin(
@@ -515,7 +515,7 @@ async def get_activity(
     row = result.first()
     if not row:
         raise NotFoundException("Activity not found")
-    
+
     activity, translation = row
     return ActivityResponse(
         id=activity.id,

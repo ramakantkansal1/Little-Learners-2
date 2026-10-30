@@ -8,7 +8,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 // Generate or retrieve a unique client ID stored in localStorage
 function getClientId(): string {
   if (typeof window === 'undefined') return 'server';
-  
+
   let clientId = localStorage.getItem('client_id');
   if (!clientId) {
     clientId = crypto.randomUUID();
@@ -30,7 +30,7 @@ let csrfToken: string | null = null;
 
 async function ensureCsrfToken(): Promise<string | null> {
   if (csrfToken) return csrfToken;
-  
+
   try {
     const response = await api.get<{ csrf_token: string }>('/auth/csrf-token');
     csrfToken = response.data.csrf_token;
@@ -50,7 +50,7 @@ api.interceptors.request.use(
     if (clientId && config.headers) {
       config.headers['X-Client-ID'] = clientId;
     }
-    
+
     // Add CSRF token for state-changing methods
     const csrfMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
     if (config.method && csrfMethods.includes(config.method.toUpperCase())) {
@@ -59,7 +59,7 @@ api.interceptors.request.use(
         config.headers['X-CSRF-Token'] = token;
       }
     }
-    
+
     return config;
   },
   (error) => Promise.reject(error)
@@ -96,7 +96,7 @@ api.interceptors.response.use(
     }
 
     // Skip token refresh for login endpoints - they should return 401 for invalid credentials
-    const isLoginEndpoint = requestUrl.includes('/auth/') && 
+    const isLoginEndpoint = requestUrl.includes('/auth/') &&
       (requestUrl.includes('/student/login') || requestUrl.includes('/parent/login') || requestUrl.includes('/parent/register'));
 
     // Handle 401 Unauthorized with token refresh (skip for login endpoints)
@@ -260,49 +260,49 @@ export interface Activity {
 }
 
 export const curriculumApi = {
-  getStages: (activeOnly = true) => 
+  getStages: (activeOnly = true) =>
     api.get<Stage[]>('/curriculum/stages', { params: { active_only: activeOnly } }),
-  
-  getStage: (stageId: number) => 
+
+  getStage: (stageId: number) =>
     api.get<Stage>(`/curriculum/stages/${stageId}`),
-  
-  getDomainsForStage: (stageId: number, activeOnly = true) => 
+
+  getDomainsForStage: (stageId: number, activeOnly = true) =>
     api.get<Domain[]>(`/curriculum/stages/${stageId}/domains`, { params: { active_only: activeOnly } }),
-  
-  getSubjects: (params?: { stage_id?: number; domain_id?: number; active_only?: boolean }) => 
+
+  getSubjects: (params?: { stage_id?: number; domain_id?: number; active_only?: boolean }) =>
     api.get<Subject[]>('/curriculum/subjects', { params }),
-  
-  getTopics: (params?: { subject_id?: number; active_only?: boolean }) => 
+
+  getTopics: (params?: { subject_id?: number; active_only?: boolean }) =>
     api.get<Topic[]>('/curriculum/topics', { params }),
-  
-  getLessons: (params?: { 
-    stage_id?: number; 
-    subject_id?: number; 
-    topic_id?: number; 
-    status?: string; 
+
+  getLessons: (params?: {
+    stage_id?: number;
+    subject_id?: number;
+    topic_id?: number;
+    status?: string;
     language?: string;
     active_only?: boolean;
     limit?: number;
     offset?: number;
-  }) => 
+  }) =>
     api.get<Lesson[]>('/curriculum/lessons', { params }),
-  
-  getLesson: (lessonId: number, language = 'en') => 
+
+  getLesson: (lessonId: number, language = 'en') =>
     api.get<Lesson>(`/curriculum/lessons/${lessonId}`, { params: { language } }),
-  
-  getLessonActivities: (lessonId: number, language = 'en', activeOnly = true) => 
+
+  getLessonActivities: (lessonId: number, language = 'en', activeOnly = true) =>
     api.get<Activity[]>(`/curriculum/lessons/${lessonId}/activities`, { params: { language, active_only: activeOnly } }),
-  
+
   getActivities: (params?: {
     lesson_id?: number;
     activity_type?: string;
     status?: string;
     language?: string;
     active_only?: boolean;
-  }) => 
+  }) =>
     api.get<Activity[]>('/curriculum/activities', { params }),
-  
-  getActivity: (activityId: number, language = 'en') => 
+
+  getActivity: (activityId: number, language = 'en') =>
     api.get<Activity>(`/curriculum/activities/${activityId}`, { params: { language } }),
 };
 
@@ -426,31 +426,31 @@ export interface ChildAnalytics {
 }
 
 export const parentApi = {
-  getMyProfile: () => 
+  getMyProfile: () =>
     api.get<ParentProfile>('/parents/me'),
-  
-  getChildren: () => 
+
+  getChildren: () =>
     api.get<Child[]>('/parents/me/children'),
-  
-  createChild: (data: ChildCreateRequest) => 
+
+  createChild: (data: ChildCreateRequest) =>
     api.post<Child>('/parents/me/children', data),
-  
-  getChild: (childId: number) => 
+
+  getChild: (childId: number) =>
     api.get<Child>(`/parents/me/children/${childId}`),
-  
-  updateChild: (childId: number, data: ChildUpdateRequest) => 
+
+  updateChild: (childId: number, data: ChildUpdateRequest) =>
     api.patch<Child>(`/parents/me/children/${childId}`, data),
-  
-  deactivateChild: (childId: number) => 
+
+  deactivateChild: (childId: number) =>
     api.delete(`/parents/me/children/${childId}`),
-  
-  getChildProgress: (childId: number) => 
+
+  getChildProgress: (childId: number) =>
     api.get(`/parents/me/children/${childId}/progress`),
-  
-  getChildRewards: (childId: number) => 
+
+  getChildRewards: (childId: number) =>
     api.get(`/parents/me/children/${childId}/rewards`),
 
-  getChildAnalytics: (childId: number) => 
+  getChildAnalytics: (childId: number) =>
     api.get<ChildAnalytics>(`/parents/me/children/${childId}/analytics`),
 };
 
@@ -609,6 +609,16 @@ export interface AnswerSubmitResponse {
   } | null;
 }
 
+export interface NextActivityRecommendation {
+  activity_id: number | null;
+  reason: string;
+  confidence: string;
+  mastery_score: number | null;
+  tier: string | null;
+  has_evidence: boolean;
+  activity: ActivityDetail | null;
+}
+
 export interface AttemptCompleteResponse {
   score: number;
   passed: boolean;
@@ -618,6 +628,11 @@ export interface AttemptCompleteResponse {
     image_url: string | null;
   }>;
   next_activity_id: number | null;
+  streak: {
+    current_streak: number;
+    longest_streak: number;
+    last_activity_date: string;
+  } | null;
 }
 
 export interface Reward {
@@ -645,40 +660,43 @@ export interface HistoryItem {
 }
 
 export const studentApi = {
-  getMyProfile: () => 
+  getMyProfile: () =>
     api.get<StudentProfile>('/students/me'),
-  
-  getDashboard: () => 
+
+  getDashboard: () =>
     api.get<DashboardData>('/students/me/dashboard'),
-  
-  getLessons: (params?: { stage_id?: number; subject_id?: number }) => 
+
+  getLessons: (params?: { stage_id?: number; subject_id?: number }) =>
     api.get<LessonListItem[]>('/students/me/lessons', { params }),
-  
-  getLessonContent: (lessonId: number) => 
+
+  getLessonContent: (lessonId: number) =>
     api.get(`/students/me/learn/${lessonId}`),
-  
-  startActivityAttempt: (activityId: number) => 
+
+  startActivityAttempt: (activityId: number) =>
     api.post<AttemptStartResponse>(`/students/me/activities/${activityId}/attempts`),
-  
-  getActivityAttempt: (attemptId: number) => 
+
+  getActivityAttempt: (attemptId: number) =>
     api.get<AttemptStartResponse>(`/students/me/attempts/${attemptId}`),
-  
-  submitAnswer: (attemptId: number, questionId: number, selectedOptionIds: number[]) => 
-    api.post<AnswerSubmitResponse>(`/students/attempts/${attemptId}/responses`, { 
-      question_id: questionId, 
-      selected_option_ids: selectedOptionIds 
+
+  submitAnswer: (attemptId: number, questionId: number, selectedOptionIds: number[]) =>
+    api.post<AnswerSubmitResponse>(`/students/attempts/${attemptId}/responses`, {
+      question_id: questionId,
+      selected_option_ids: selectedOptionIds
     }),
-  
-  completeAttempt: (attemptId: number) => 
+
+  completeAttempt: (attemptId: number) =>
     api.post<AttemptCompleteResponse>(`/students/attempts/${attemptId}/complete`),
-  
-  getRewards: () => 
+
+  getRewards: () =>
     api.get<Reward[]>('/students/me/rewards'),
-  
-  getHistory: () => 
+
+  getHistory: () =>
     api.get<HistoryItem[]>('/students/me/history'),
-  
-  updatePreferences: (prefs: Record<string, unknown>) => 
+
+  getNextActivity: () =>
+    api.get<NextActivityRecommendation>('/students/me/next-activity'),
+
+  updatePreferences: (prefs: Record<string, unknown>) =>
     api.patch('/students/me/preferences', prefs),
 };
 
@@ -730,23 +748,23 @@ export interface ActivityAttempt {
 }
 
 export const progressApi = {
-  getStudentEnrollments: (studentId: number) => 
+  getStudentEnrollments: (studentId: number) =>
     api.get<Enrollment[]>(`/progress/students/${studentId}/enrollments`),
-  
-  createEnrollment: (studentId: number, stageId: number, subjectId?: number) => 
-    api.post<Enrollment>(`/progress/students/${studentId}/enrollments`, null, { 
-      params: { stage_id: stageId, subject_id: subjectId } 
+
+  createEnrollment: (studentId: number, stageId: number, subjectId?: number) =>
+    api.post<Enrollment>(`/progress/students/${studentId}/enrollments`, null, {
+      params: { stage_id: stageId, subject_id: subjectId }
     }),
-  
-  getLessonProgress: (studentId: number) => 
+
+  getLessonProgress: (studentId: number) =>
     api.get<LessonProgress[]>(`/progress/students/${studentId}/lessons`),
-  
-  getActivityAttempts: (studentId: number, lessonId?: number) => 
-    api.get<ActivityAttempt[]>(`/progress/students/${studentId}/activities`, { 
-      params: { lesson_id: lessonId } 
+
+  getActivityAttempts: (studentId: number, lessonId?: number) =>
+    api.get<ActivityAttempt[]>(`/progress/students/${studentId}/activities`, {
+      params: { lesson_id: lessonId }
     }),
-  
-  getChildProgressSummary: (childId: number) => 
+
+  getChildProgressSummary: (childId: number) =>
     api.get(`/progress/parents/me/children/${childId}/summary`),
 };
 
@@ -873,25 +891,30 @@ export interface AuditLog {
   error_message: string | null;
 }
 
+export interface ActivityDifficultyTierResponse {
+  activity_id: number;
+  difficulty_tier: number | null;
+}
+
 export const adminApi = {
-  getDashboard: () => 
+  getDashboard: () =>
     api.get<AdminDashboardMetrics>('/admin/dashboard'),
-  
-  getUsers: (params?: { 
-    role?: string; 
-    is_active?: boolean; 
-    search?: string; 
-    limit?: number; 
-    offset?: number; 
-  }) => 
+
+  getUsers: (params?: {
+    role?: string;
+    is_active?: boolean;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
     api.get<AdminUser[]>('/admin/users', { params }),
-  
-  updateUser: (userId: number, data: { is_active?: boolean; role?: string }) => 
+
+  updateUser: (userId: number, data: { is_active?: boolean; role?: string }) =>
     api.patch(`/admin/users/${userId}`, data),
-  
-  getStages: () => 
+
+  getStages: () =>
     api.get<AdminStage[]>('/admin/stages'),
-  
+
   createStage: (data: {
     code: string;
     name: string;
@@ -902,24 +925,24 @@ export const adminApi = {
     icon?: string;
     color?: string;
     is_active?: boolean;
-  }) => 
+  }) =>
     api.post<AdminStage>('/admin/stages', data),
-  
-  updateStage: (stageId: number, data: Partial<AdminStage>) => 
+
+  updateStage: (stageId: number, data: Partial<AdminStage>) =>
     api.patch<AdminStage>(`/admin/stages/${stageId}`, data),
-  
-  deleteStage: (stageId: number) => 
+
+  deleteStage: (stageId: number) =>
     api.delete(`/admin/stages/${stageId}`),
-  
-  getLessons: (params?: { 
-    stage_id?: number; 
-    subject_id?: number; 
-    status?: string; 
-    limit?: number; 
-    offset?: number; 
-  }) => 
+
+  getLessons: (params?: {
+    stage_id?: number;
+    subject_id?: number;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
     api.get<AdminLesson[]>(`/admin/lessons`, { params }),
-  
+
   createLesson: (data: {
     topic_id: number;
     code: string;
@@ -931,9 +954,9 @@ export const adminApi = {
     display_order?: number;
     is_active?: boolean;
     translations?: Array<{ language: string; title: string; description?: string; instructions?: string; audio_url?: string }>;
-  }) => 
+  }) =>
     api.post<AdminLesson>(`/admin/lessons`, data),
-  
+
   updateLesson: (lessonId: number, data: {
     topic_id?: number;
     status?: string;
@@ -944,29 +967,29 @@ export const adminApi = {
     display_order?: number;
     is_active?: boolean;
     translations?: Array<{ language: string; title: string; description?: string; instructions?: string; audio_url?: string }>;
-  }) => 
+  }) =>
     api.patch<AdminLesson>(`/admin/lessons/${lessonId}`, data),
-  
-  publishLesson: (lessonId: number) => 
+
+  publishLesson: (lessonId: number) =>
     api.post<ValidationResult>(`/admin/lessons/${lessonId}/publish`),
-  
-  validateLesson: (lessonId: number) => 
+
+  validateLesson: (lessonId: number) =>
     api.get<ValidationResult>(`/admin/lessons/${lessonId}/validate`),
-  
-  unpublishLesson: (lessonId: number) => 
+
+  unpublishLesson: (lessonId: number) =>
     api.post(`/admin/lessons/${lessonId}/unpublish`),
-  
-  archiveLesson: (lessonId: number) => 
+
+  archiveLesson: (lessonId: number) =>
     api.post(`/admin/lessons/${lessonId}/archive`),
 
-  getSubjects: (params?: { 
-    stage_id?: number; 
-    domain_id?: number; 
-    limit?: number; 
-    offset?: number; 
-  }) => 
+  getSubjects: (params?: {
+    stage_id?: number;
+    domain_id?: number;
+    limit?: number;
+    offset?: number;
+  }) =>
     api.get<AdminSubject[]>(`/admin/subjects`, { params }),
-  
+
   createSubject: (data: {
     stage_id: number;
     domain_id: number;
@@ -977,9 +1000,9 @@ export const adminApi = {
     icon?: string;
     color?: string;
     is_active?: boolean;
-  }) => 
+  }) =>
     api.post<AdminSubject>(`/admin/subjects`, data),
-  
+
   updateSubject: (subjectId: number, data: {
     stage_id?: number;
     domain_id?: number;
@@ -989,21 +1012,21 @@ export const adminApi = {
     icon?: string;
     color?: string;
     is_active?: boolean;
-  }) => 
+  }) =>
     api.patch<AdminSubject>(`/admin/subjects/${subjectId}`, data),
-  
-  deleteSubject: (subjectId: number) => 
+
+  deleteSubject: (subjectId: number) =>
     api.delete(`/admin/subjects/${subjectId}`),
-  
-  getActivities: (params?: { 
-    lesson_id?: number; 
-    activity_type?: string; 
-    status?: string; 
-    limit?: number; 
-    offset?: number; 
-  }) => 
+
+  getActivities: (params?: {
+    lesson_id?: number;
+    activity_type?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
     api.get<AdminActivity[]>(`/admin/activities`, { params }),
-  
+
   createActivity: (data: {
     lesson_id: number;
     type: string;
@@ -1016,9 +1039,9 @@ export const adminApi = {
     configuration?: Record<string, unknown>;
     is_active?: boolean;
     translations?: Array<{ language: string; title: string; instructions?: string; audio_url?: string }>;
-  }) => 
+  }) =>
     api.post<AdminActivity>(`/admin/activities`, data),
-  
+
   updateActivity: (activityId: number, data: {
     lesson_id?: number;
     type?: string;
@@ -1030,34 +1053,40 @@ export const adminApi = {
     configuration?: Record<string, unknown>;
     is_active?: boolean;
     translations?: Array<{ language: string; title: string; instructions?: string; audio_url?: string }>;
-  }) => 
+  }) =>
     api.patch<AdminActivity>(`/admin/activities/${activityId}`, data),
-  
-  deleteActivity: (activityId: number) => 
+
+  deleteActivity: (activityId: number) =>
     api.delete(`/admin/activities/${activityId}`),
-  
-  validateActivity: (activityId: number) => 
+
+  validateActivity: (activityId: number) =>
     api.get<ValidationResult>(`/admin/activities/${activityId}/validate`),
-  
-  getAnalytics: (days = 30) => 
+
+  getAnalytics: (days = 30) =>
     api.get<AnalyticsData>(`/admin/analytics`, { params: { days } }),
-  
-  getAuditLogs: (params?: { 
-    user_id?: number; 
-    action?: string; 
-    resource_type?: string; 
-    start_date?: string; 
-    end_date?: string; 
-    limit?: number; 
-    offset?: number; 
-  }) => 
+
+  getAuditLogs: (params?: {
+    user_id?: number;
+    action?: string;
+    resource_type?: string;
+    start_date?: string;
+    end_date?: string;
+    limit?: number;
+    offset?: number;
+  }) =>
     api.get(`/admin/audit-logs`, { params }),
-  
-  getSettings: () => 
+
+  getSettings: () =>
     api.get('/admin/settings'),
-  
-  updateSettings: (data: Record<string, unknown>) => 
+
+  updateSettings: (data: Record<string, unknown>) =>
     api.patch('/admin/settings', data),
+
+  getActivityDifficultyTier: (activityId: number) =>
+    api.get<ActivityDifficultyTierResponse>(`/admin/activities/${activityId}/difficulty-tier`),
+
+  updateActivityDifficultyTier: (activityId: number, difficultyTier: number | null) =>
+    api.patch<ActivityDifficultyTierResponse>(`/admin/activities/${activityId}/difficulty-tier`, { difficulty_tier: difficultyTier }),
 };
 
 // ===========================================
@@ -1088,27 +1117,27 @@ export interface MediaAsset {
 }
 
 export const mediaApi = {
-  list: (params?: { 
-    media_type?: string; 
-    language?: string; 
-    is_processed?: boolean; 
-    limit?: number; 
-    offset?: number; 
-  }) => 
+  list: (params?: {
+    media_type?: string;
+    language?: string;
+    is_processed?: boolean;
+    limit?: number;
+    offset?: number;
+  }) =>
     api.get<MediaAsset[]>('/media', { params }),
-  
-  get: (mediaId: number) => 
+
+  get: (mediaId: number) =>
     api.get<MediaAsset>(`/media/${mediaId}`),
-  
-  upload: (file: File, data: { 
-    media_type: string; 
-    language?: string; 
-    alt_text?: string; 
-    caption?: string; 
-    source?: string; 
-    license?: string; 
-    attribution?: string; 
-    tags?: string; 
+
+  upload: (file: File, data: {
+    media_type: string;
+    language?: string;
+    alt_text?: string;
+    caption?: string;
+    source?: string;
+    license?: string;
+    attribution?: string;
+    tags?: string;
   }) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -1119,13 +1148,13 @@ export const mediaApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
-  
-  delete: (mediaId: number) => 
+
+  delete: (mediaId: number) =>
     api.delete(`/media/${mediaId}`),
-  
-  getLessonMedia: (lessonId: number) => 
+
+  getLessonMedia: (lessonId: number) =>
     api.get<MediaAsset[]>(`/media/lessons/${lessonId}/media`),
-  
-  getActivityMedia: (activityId: number) => 
+
+  getActivityMedia: (activityId: number) =>
     api.get<MediaAsset[]>(`/media/activities/${activityId}/media`),
 };

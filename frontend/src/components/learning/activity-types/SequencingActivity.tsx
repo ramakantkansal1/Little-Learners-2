@@ -37,6 +37,11 @@ export function SequencingActivity(props: ActivityTypeComponentProps): React.Rea
     audioEnabled,
     attemptId: _attemptId,
     loading,
+      recommendation,
+      recommendationLoading,
+      recommendationError,
+      startingRecommended,
+      onStartRecommended,
     submitting,
     error,
   } = props;
@@ -55,6 +60,12 @@ export function SequencingActivity(props: ActivityTypeComponentProps): React.Rea
       onBack: () => window.history.back(),
       onRetry,
       loading,
+      // Recommendation props
+      recommendation,
+      recommendationLoading,
+      recommendationError,
+      startingRecommended,
+      onStartRecommended,
     });
   }
 

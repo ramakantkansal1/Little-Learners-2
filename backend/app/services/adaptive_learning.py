@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
@@ -11,6 +11,15 @@ from app.models import Activity, ActivityAttempt, ActivityResponse, Lesson, Topi
 
 MIN_ATTEMPTS_FOR_SIGNAL = 3
 REVIEW_INTERVAL_DAYS = 7
+
+# Difficulty tier mapping: mastery tier -> preferred difficulty tier
+# 1 = Easy, 2 = Medium, 3 = Hard
+MASTERY_TO_DIFFICULTY_TIER = {
+    "remediate": 1,    # prefers Easy
+    "maintain": 2,     # prefers Medium
+    "advance": 3,      # prefers Hard
+    "cold_start": None,  # no preference, uses curriculum sequence
+}
 
 
 @dataclass
@@ -293,6 +302,51 @@ class RecommendationService:
             has_evidence=has_evidence,
         )
 
+    def _get_activity_difficulty_tier(self, activity: Activity) -> Optional[int]:
+        """Get the difficulty tier from activity configuration."""
+        if activity.configuration and isinstance(activity.configuration, dict):
+            tier = activity.configuration.get("difficulty_tier")
+            if tier is not None:
+                return int(tier)
+        return None
+
+    def _get_preferred_difficulty_tier(self, mastery_tier: str) -> Optional[int]:
+        """Get the preferred difficulty tier for a given mastery tier."""
+        return MASTERY_TO_DIFFICULTY_TIER.get(mastery_tier)
+
+    def _filter_activities_by_difficulty_tier(
+        self,
+        activities: List[Activity],
+        preferred_tier: Optional[int],
+    ) -> List[Activity]:
+        """Filter activities by difficulty tier, with fallback to all activities.
+
+        If preferred_tier is None (cold_start), return all activities.
+        If preferred_tier is set, first try to find activities with that exact tier.
+        If none found, fall back to activities without a configured tier (preserves existing behavior).
+        """
+        if preferred_tier is None:
+            return activities
+
+        # First, try to find activities with the exact matching difficulty tier
+        exact_match = [
+            a for a in activities
+            if self._get_activity_difficulty_tier(a) == preferred_tier
+        ]
+        if exact_match:
+            return exact_match
+
+        # Fallback: activities without a configured tier (preserves existing behavior)
+        no_tier = [
+            a for a in activities
+            if self._get_activity_difficulty_tier(a) is None
+        ]
+        if no_tier:
+            return no_tier
+
+        # Last resort: return all activities (should not happen but safe fallback)
+        return activities
+
     async def _find_review_candidate(
         self,
         student_id: int,
@@ -406,6 +460,13 @@ class RecommendationService:
         if not next_activities:
             return None
 
+        # Filter by difficulty tier based on mastery tier
+        preferred_tier = self._get_preferred_difficulty_tier(tier)
+        next_activities = self._filter_activities_by_difficulty_tier(next_activities, preferred_tier)
+
+        if not next_activities:
+            return None
+
         return next_activities[0]
 
     async def _find_next_in_topic(
@@ -456,6 +517,13 @@ class RecommendationService:
         if not next_activities:
             return None
 
+        # Filter by difficulty tier based on mastery tier
+        preferred_tier = self._get_preferred_difficulty_tier(tier)
+        next_activities = self._filter_activities_by_difficulty_tier(next_activities, preferred_tier)
+
+        if not next_activities:
+            return None
+
         return next_activities[0]
 
     async def _find_first_in_stage(
@@ -494,7 +562,11 @@ class RecommendationService:
             if last_completed and last_completed > cutoff:
                 continue
 
-        return activities[0] if activities else None
+        # Filter by difficulty tier based on mastery tier
+        preferred_tier = self._get_preferred_difficulty_tier(tier)
+        filtered_activities = self._filter_activities_by_difficulty_tier(activities, preferred_tier)
+
+        return filtered_activities[0] if filtered_activities else None
 
     def _build_reason(self, tier: str, mastery: Optional[object]) -> str:
         if tier == "cold_start":

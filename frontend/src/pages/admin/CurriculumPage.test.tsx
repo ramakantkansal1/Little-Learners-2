@@ -26,6 +26,8 @@ vi.mock('@services/api', () => {
       archiveLesson: vi.fn(),
       publishLesson: vi.fn(),
       unpublishLesson: vi.fn(),
+      getActivityDifficultyTier: vi.fn(),
+      updateActivityDifficultyTier: vi.fn(),
     },
     curriculumApi: {
       getSubjects: vi.fn(),
@@ -113,6 +115,8 @@ function resetApiMocks() {
   vi.mocked(adminApi.archiveLesson).mockResolvedValue(empty);
   vi.mocked(adminApi.publishLesson).mockResolvedValue(empty);
   vi.mocked(adminApi.unpublishLesson).mockResolvedValue(empty);
+  vi.mocked(adminApi.getActivityDifficultyTier).mockResolvedValue(empty);
+  vi.mocked(adminApi.updateActivityDifficultyTier).mockResolvedValue(empty);
 }
 
 describe('CurriculumPage — Form Validation', () => {

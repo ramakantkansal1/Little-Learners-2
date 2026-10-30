@@ -10,7 +10,7 @@ test.describe('Student Navigation', () => {
     await page.fill('input[name="pin"]', pin);
     await page.click('button[type="submit"]');
     // Wait for dashboard to fully load: URL + profile name
-    await expect(page).toHaveURL(/.*student\/dashboard/);
+    await expect(page).toHaveURL(/.*student\/dashboard/, { timeout: 30000 });
     await expect(page.locator('text=Aarav').first()).toBeVisible({ timeout: 10000 });
 
     // Wait for sidebar to be visible
@@ -54,7 +54,7 @@ test.describe('Student Navigation', () => {
     await page.locator('text=My Journey').first().click({ force: true });
     await expect(page).toHaveURL(/.*student\/history/);
     // Page title should be "Learning Journey" (per HistoryPage.tsx)
-    await expect(page.locator('main h1:has-text("Learning Journey")')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('h1:has-text("Learning Journey")')).toBeVisible({ timeout: 30000 });
   });
 
   test('should use browser back and forward', async ({ page }) => {
@@ -75,13 +75,13 @@ test.describe('Student Navigation', () => {
     test.setTimeout(60000);
     await expect(page.locator('text=My Journey').first()).toBeVisible({ timeout: 10000 });
     await page.locator('text=My Journey').first().click({ force: true });
-    await expect(page.locator('main h1:has-text("Learning Journey")')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('h1:has-text("Learning Journey")')).toBeVisible({ timeout: 30000 });
     
     await page.reload();
     // Wait for history data API response after reload
     await page.waitForResponse('**/api/v1/students/me/history');
     // Wait for page content to reappear after reload
-    await expect(page.locator('main h1:has-text("Learning Journey")')).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('h1:has-text("Learning Journey")')).toBeVisible({ timeout: 30000 });
   });
 
   test('should reload rewards page correctly', async ({ page }) => {

@@ -38,6 +38,11 @@ export function TracingActivity(props: ActivityTypeComponentProps): React.ReactE
     audioEnabled,
     attemptId: _attemptId,
     loading,
+      recommendation,
+      recommendationLoading,
+      recommendationError,
+      startingRecommended,
+      onStartRecommended,
     submitting,
     error,
   } = props;
@@ -56,6 +61,12 @@ export function TracingActivity(props: ActivityTypeComponentProps): React.ReactE
       onBack: () => window.history.back(),
       onRetry,
       loading,
+      // Recommendation props
+      recommendation,
+      recommendationLoading,
+      recommendationError,
+      startingRecommended,
+      onStartRecommended,
     });
   }
 

@@ -101,14 +101,14 @@ class ProgressSummaryResponse(BaseModel):
 async def get_student_for_parent(db: AsyncSession, parent_user_id: int, child_id: int):
     """Verify child belongs to parent and return student."""
     from app.models import ParentProfile, ParentStudentRelationship
-    
+
     parent_result = await db.execute(
         select(ParentProfile).where(ParentProfile.user_id == parent_user_id)
     )
     parent = parent_result.scalar_one_or_none()
     if not parent:
         raise NotFoundException("Parent profile not found")
-    
+
     rel_result = await db.execute(
         select(ParentStudentRelationship)
         .where(ParentStudentRelationship.parent_id == parent.id)
@@ -118,7 +118,7 @@ async def get_student_for_parent(db: AsyncSession, parent_user_id: int, child_id
     relationship = rel_result.scalar_one_or_none()
     if not relationship:
         raise NotFoundException("Child not found or cannot view progress")
-    
+
     from app.models import StudentProfile
     student_result = await db.execute(
         select(StudentProfile)
@@ -128,7 +128,7 @@ async def get_student_for_parent(db: AsyncSession, parent_user_id: int, child_id
     student = student_result.scalar_one_or_none()
     if not student or student.is_deleted:
         raise NotFoundException("Child not found")
-    
+
     return student
 
 
@@ -142,7 +142,7 @@ async def get_student_enrollments(
     """Get enrollments for a student."""
     # Check permissions - parent can view own children, student can view self, admin can view all
     user_roles = [ur.role.name for ur in current_user.user_roles]
-    
+
     if "parent" in user_roles:
         await get_student_for_parent(db, current_user.id, student_id)
     elif "student" in user_roles:
@@ -155,7 +155,7 @@ async def get_student_enrollments(
             raise HTTPException(status_code=403, detail="Not authorized")
     elif "admin" not in user_roles:
         raise HTTPException(status_code=403, detail="Not authorized")
-    
+
     from app.models import StudentEnrollment, LearningStage, Subject
     result = await db.execute(
         select(StudentEnrollment, LearningStage, Subject)
@@ -164,7 +164,7 @@ async def get_student_enrollments(
         .where(StudentEnrollment.student_id == student_id)
         .order_by(StudentEnrollment.enrolled_at.desc())
     )
-    
+
     enrollments = []
     for enrollment, stage, subject in result.all():
         enrollments.append(EnrollmentResponse(
@@ -179,7 +179,7 @@ async def get_student_enrollments(
             enrolled_at=enrollment.enrolled_at.isoformat(),
             completed_at=enrollment.completed_at.isoformat() if enrollment.completed_at else None,
         ))
-    
+
     return enrollments
 
 
@@ -193,12 +193,12 @@ async def create_enrollment(
 ):
     """Enroll a student in a stage/subject."""
     user_roles = [ur.role.name for ur in current_user.user_roles]
-    
+
     if "parent" in user_roles:
         await get_student_for_parent(db, current_user.id, student_id)
     elif "admin" not in user_roles:
         raise HTTPException(status_code=403, detail="Not authorized")
-    
+
     # Verify stage
     from app.models import LearningStage, Subject, StudentEnrollment
     stage_result = await db.execute(
@@ -207,7 +207,7 @@ async def create_enrollment(
     stage = stage_result.scalar_one_or_none()
     if not stage:
         raise ValidationException("Invalid stage")
-    
+
     if subject_id:
         subject_result = await db.execute(
             select(Subject).where(Subject.id == subject_id).where(Subject.is_active == True)
@@ -215,7 +215,7 @@ async def create_enrollment(
         subject = subject_result.scalar_one_or_none()
         if not subject or subject.stage_id != stage_id:
             raise ValidationException("Invalid subject for this stage")
-    
+
     # Check existing enrollment
     existing_result = await db.execute(
         select(StudentEnrollment)
@@ -226,7 +226,7 @@ async def create_enrollment(
     existing = existing_result.scalar_one_or_none()
     if existing:
         raise ValidationException("Enrollment already exists")
-    
+
     enrollment = StudentEnrollment(
         student_id=student_id,
         stage_id=stage_id,
@@ -238,7 +238,7 @@ async def create_enrollment(
     db.add(enrollment)
     await db.commit()
     await db.refresh(enrollment)
-    
+
     return EnrollmentResponse(
         id=enrollment.id,
         student_id=enrollment.student_id,
@@ -261,7 +261,7 @@ async def get_student_lesson_progress(
 ):
     """Get lesson progress for a student."""
     user_roles = [ur.role.name for ur in current_user.user_roles]
-    
+
     if "parent" in user_roles:
         await get_student_for_parent(db, current_user.id, student_id)
     elif "student" in user_roles:
@@ -273,7 +273,7 @@ async def get_student_lesson_progress(
             raise HTTPException(status_code=403, detail="Not authorized")
     elif "admin" not in user_roles:
         raise HTTPException(status_code=403, detail="Not authorized")
-    
+
     from app.models import StudentLessonProgress, Lesson, LessonTranslation
     result = await db.execute(
         select(StudentLessonProgress, Lesson)
@@ -281,7 +281,7 @@ async def get_student_lesson_progress(
         .where(StudentLessonProgress.student_id == student_id)
         .order_by(StudentLessonProgress.created_at.desc())
     )
-    
+
     progress_list = []
     for progress, lesson in result.all():
         # Get lesson translation for title
@@ -291,7 +291,7 @@ async def get_student_lesson_progress(
             .where(LessonTranslation.language == 'en')  # Default to English
         )
         trans = trans_result.scalar_one_or_none()
-        
+
         progress_list.append(LessonProgressResponse(
             id=progress.id,
             student_id=progress.student_id,
@@ -304,7 +304,7 @@ async def get_student_lesson_progress(
             time_spent_seconds=progress.time_spent_seconds,
             completion_percentage=progress.completion_percentage,
         ))
-    
+
     return progress_list
 
 
@@ -317,7 +317,7 @@ async def get_student_activity_attempts(
 ):
     """Get activity attempts for a student."""
     user_roles = [ur.role.name for ur in current_user.user_roles]
-    
+
     if "parent" in user_roles:
         await get_student_for_parent(db, current_user.id, student_id)
     elif "student" in user_roles:
@@ -329,7 +329,7 @@ async def get_student_activity_attempts(
             raise HTTPException(status_code=403, detail="Not authorized")
     elif "admin" not in user_roles:
         raise HTTPException(status_code=403, detail="Not authorized")
-    
+
     from app.models import ActivityAttempt, Activity, Lesson, ActivityTranslation
     query = (
         select(ActivityAttempt, Activity, Lesson)
@@ -337,13 +337,13 @@ async def get_student_activity_attempts(
         .join(Lesson, Activity.lesson_id == Lesson.id)
         .where(ActivityAttempt.student_id == student_id)
     )
-    
+
     if lesson_id:
         query = query.where(Activity.lesson_id == lesson_id)
-    
+
     query = query.order_by(ActivityAttempt.started_at.desc())
     result = await db.execute(query)
-    
+
     attempts = []
     for attempt, activity, lesson in result.all():
         trans_result = await db.execute(
@@ -352,14 +352,14 @@ async def get_student_activity_attempts(
             .where(ActivityTranslation.language == 'en')
         )
         trans = trans_result.scalar_one_or_none()
-        
+
         lesson_trans_result = await db.execute(
             select(LessonTranslation)
             .where(LessonTranslation.lesson_id == lesson.id)
             .where(LessonTranslation.language == 'en')
         )
         lesson_trans = lesson_trans_result.scalar_one_or_none()
-        
+
         attempts.append(ActivityAttemptResponse(
             id=attempt.id,
             student_id=attempt.student_id,
@@ -376,7 +376,7 @@ async def get_student_activity_attempts(
             max_score=attempt.max_score,
             passed=attempt.passed,
         ))
-    
+
     return attempts
 
 
@@ -388,10 +388,10 @@ async def get_child_progress_summary(
 ):
     """Get comprehensive progress summary for a child (parent view)."""
     await get_student_for_parent(db, current_user.id, child_id)
-    
+
     from app.models import StudentProfile, Lesson, StudentLessonProgress, ActivityAttempt, LearningStage, Subject, Topic
     from app.models import LessonTranslation
-    
+
     student_result = await db.execute(
         select(StudentProfile)
         .where(StudentProfile.id == child_id)
@@ -400,9 +400,9 @@ async def get_child_progress_summary(
     student = student_result.scalar_one_or_none()
     if not student:
         raise NotFoundException("Child not found")
-    
+
     stage = student.current_stage
-    
+
     # Total lessons in stage
     if stage:
         total_lessons_result = await db.execute(
@@ -416,7 +416,7 @@ async def get_child_progress_summary(
         total_lessons = total_lessons_result.scalar() or 0
     else:
         total_lessons = 0
-    
+
     # Progress counts
     completed_result = await db.execute(
         select(func.count(StudentLessonProgress.id))
@@ -424,31 +424,31 @@ async def get_child_progress_summary(
         .where(StudentLessonProgress.status == "completed")
     )
     completed_lessons = completed_result.scalar() or 0
-    
+
     in_progress_result = await db.execute(
         select(func.count(StudentLessonProgress.id))
         .where(StudentLessonProgress.student_id == child_id)
         .where(StudentLessonProgress.status == "in_progress")
     )
     in_progress_lessons = in_progress_result.scalar() or 0
-    
+
     not_started = total_lessons - completed_lessons - in_progress_lessons
     completion_rate = (completed_lessons / total_lessons * 100) if total_lessons > 0 else 0
-    
+
     # Activity stats
     total_activities_result = await db.execute(
         select(func.count(ActivityAttempt.id))
         .where(ActivityAttempt.student_id == child_id)
     )
     total_activities = total_activities_result.scalar() or 0
-    
+
     completed_activities_result = await db.execute(
         select(func.count(ActivityAttempt.id))
         .where(ActivityAttempt.student_id == child_id)
         .where(ActivityAttempt.status == "completed")
     )
     completed_activities = completed_activities_result.scalar() or 0
-    
+
     score_result = await db.execute(
         select(func.avg(ActivityAttempt.score))
         .where(ActivityAttempt.student_id == child_id)
@@ -456,14 +456,14 @@ async def get_child_progress_summary(
         .where(ActivityAttempt.score.is_not(None))
     )
     avg_score = score_result.scalar()
-    
+
     time_result = await db.execute(
         select(func.sum(ActivityAttempt.time_spent_seconds))
         .where(ActivityAttempt.student_id == child_id)
         .where(ActivityAttempt.status == "completed")
     )
     total_time = time_result.scalar() or 0
-    
+
     # Recent activity
     recent_result = await db.execute(
         select(ActivityAttempt, Activity, Lesson)
@@ -475,7 +475,7 @@ async def get_child_progress_summary(
         .limit(10)
     )
     recent = recent_result.all()
-    
+
     recent_activity = []
     for attempt, activity, lesson in recent:
         act_trans_result = await db.execute(
@@ -484,14 +484,14 @@ async def get_child_progress_summary(
             .where(ActivityTranslation.language == 'en')
         )
         act_trans = act_trans_result.scalar_one_or_none()
-        
+
         lesson_trans_result = await db.execute(
             select(LessonTranslation)
             .where(LessonTranslation.lesson_id == lesson.id)
             .where(LessonTranslation.language == 'en')
         )
         lesson_trans = lesson_trans_result.scalar_one_or_none()
-        
+
         recent_activity.append({
             "lesson": lesson_trans.title if lesson_trans else lesson.code,
             "activity": act_trans.title if act_trans else activity.code,
@@ -499,7 +499,7 @@ async def get_child_progress_summary(
             "score": attempt.score,
             "time_spent": attempt.time_spent_seconds,
         })
-    
+
     return ProgressSummaryResponse(
         student_id=student.id,
         student_name=student.display_name,

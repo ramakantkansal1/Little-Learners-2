@@ -274,10 +274,10 @@ async def seed_topics_and_content(db: AsyncSession, stages: dict[str, LearningSt
     """Seed topics, objectives, lessons, activities, and questions."""
     # This is a simplified seed - in production, you'd want more comprehensive content
     # For each stage, create sample topics for each subject
-    
+
     for stage_code, stage_subjects in subjects.items():
         stage = stages[stage_code]
-        
+
         for subject_code, subject in stage_subjects.items():
             # Create 3 topics per subject
             topic_names = {
@@ -328,9 +328,9 @@ async def seed_topics_and_content(db: AsyncSession, stages: dict[str, LearningSt
                     "our_world": ["Festivals of India", "Transport", "Safety Rules"],
                 },
             }
-            
+
             topics_to_create = topic_names.get(stage_code, {}).get(subject_code, [f"Topic {i+1}" for i in range(3)])
-            
+
             for i, topic_name in enumerate(topics_to_create):
                 # Create topic
                 result = await db.execute(
@@ -417,7 +417,7 @@ async def seed_topics_and_content(db: AsyncSession, stages: dict[str, LearningSt
                         ActivityTypeEnum.PICTURE_MATCHING,
                         ActivityTypeEnum.SIMPLE_QUIZ,
                     ]
-                    
+
                     for j, act_type in enumerate(activity_types):
                         act_result = await db.execute(
                             select(Activity).where(Activity.lesson_id == lesson.id, Activity.code == f"activity_{j+1}")
@@ -539,20 +539,20 @@ async def seed_topics_and_content(db: AsyncSession, stages: dict[str, LearningSt
 async def seed_roles(db: AsyncSession):
     """Seed system roles."""
     from app.permissions.roles import Role as RoleEnum
-    
+
     roles_data = [
         {"name": RoleEnum.ADMIN.value, "description": "System administrator", "is_system": True},
         {"name": RoleEnum.PARENT.value, "description": "Parent/guardian", "is_system": True},
         {"name": RoleEnum.STUDENT.value, "description": "Student/child", "is_system": True},
     ]
-    
+
     for role_data in roles_data:
         result = await db.execute(select(Role).where(Role.name == role_data["name"]))
         role = result.scalar_one_or_none()
         if not role:
             role = Role(**role_data)
             db.add(role)
-    
+
     await db.commit()
 
 

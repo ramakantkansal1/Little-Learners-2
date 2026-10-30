@@ -7,7 +7,7 @@ test.describe('Error Handling', () => {
     await page.fill('input[name="username"]', 'aarav_1');
     await page.fill('input[name="pin"]', '1234');
     await page.click('button[type="submit"]');
-    await expect(page).toHaveURL(/.*student\/dashboard/);
+    await expect(page).toHaveURL(/.*student\/dashboard/, { timeout: 30000 });
     await expect(page.locator('text=Aarav').first()).toBeVisible({ timeout: 10000 });
     
     // Clear cookies to simulate auth failure

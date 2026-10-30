@@ -149,10 +149,10 @@ async def calculate_child_progress(student: StudentProfile, db: AsyncSession) ->
     # Get all published lessons for child's stage
     if not student.current_stage_id:
         return 0
-    
+
     from app.models import Lesson, StudentLessonProgress, Topic, Subject
     from sqlalchemy import select, func
-    
+
     # Total published lessons in stage
     total_result = await db.execute(
         select(func.count(Lesson.id))
@@ -163,10 +163,10 @@ async def calculate_child_progress(student: StudentProfile, db: AsyncSession) ->
         .where(Lesson.is_active == True)
     )
     total_lessons = int(total_result.scalar() or 0)
-    
+
     if total_lessons == 0:
         return 0
-    
+
     # Completed lessons
     completed_result = await db.execute(
         select(func.count(StudentLessonProgress.id))
@@ -174,7 +174,7 @@ async def calculate_child_progress(student: StudentProfile, db: AsyncSession) ->
         .where(StudentLessonProgress.status == "completed")
     )
     completed = int(completed_result.scalar() or 0)
-    
+
     # Ensure integer result
     if total_lessons > 0:
         progress = (completed / total_lessons) * 100
@@ -195,9 +195,9 @@ async def get_my_profile(
     parent_roles = [ur.role.name for ur in current_user.user_roles]
     if "parent" not in parent_roles and "admin" not in parent_roles:
         raise HTTPException(status_code=403, detail="Not authorized")
-    
+
     profile = await get_parent_profile(db, current_user.id)
-    
+
     # Build children response with progress
     children_response = []
     for rel in profile.student_relationships:
@@ -222,7 +222,7 @@ async def get_my_profile(
                 last_activity_at=rel.student.last_activity_at.isoformat() if rel.student.last_activity_at else None,
                 username=rel.student.username,
             ))
-    
+
     return ParentProfileResponse(
         id=profile.id,
         user_id=profile.user_id,
@@ -241,7 +241,7 @@ async def list_my_children(
 ):
     """List all children for current parent."""
     profile = await get_parent_profile(db, current_user.id)
-    
+
     children_response = []
     for rel in profile.student_relationships:
         if not rel.student.is_deleted:
@@ -265,7 +265,7 @@ async def list_my_children(
                 last_activity_at=rel.student.last_activity_at.isoformat() if rel.student.last_activity_at else None,
                 username=rel.student.username,
             ))
-    
+
     return children_response
 
 
@@ -277,7 +277,7 @@ async def create_child(
 ):
     """Create a new child profile."""
     profile = await get_parent_profile(db, current_user.id)
-    
+
     # Validate stage if provided
     if request.current_stage_id:
         from app.models import LearningStage
@@ -287,11 +287,11 @@ async def create_child(
         stage = stage_result.scalar_one_or_none()
         if not stage or not stage.is_active:
             raise ValidationException("Invalid learning stage")
-    
+
     # Hash PIN if provided
     from app.core.security import get_password_hash
     pin_hash = get_password_hash(request.pin) if request.pin else None
-    
+
     # Parse date of birth
     dob = None
     if request.date_of_birth:
@@ -300,7 +300,7 @@ async def create_child(
             dob = date.fromisoformat(request.date_of_birth)
         except ValueError:
             raise ValidationException("Invalid date format. Use YYYY-MM-DD")
-    
+
     # Create student user first (we need the user_id for the student)
     student_user = User(
         email=f"student_{request.display_name.lower().replace(' ', '_')}_new_{profile.id}@hll.local",
@@ -310,7 +310,7 @@ async def create_child(
     )
     db.add(student_user)
     await db.flush()
-    
+
     # Create student profile with generated username
     from app.models import GenderEnum
     gender = None
@@ -319,10 +319,10 @@ async def create_child(
             gender = GenderEnum(request.gender)
         except ValueError:
             pass
-    
+
     # Generate username from display_name (will update with actual ID after flush)
     temp_username = request.display_name.lower().replace(' ', '_')
-    
+
     student = StudentProfile(
         user_id=student_user.id,
         display_name=request.display_name,
@@ -337,13 +337,13 @@ async def create_child(
     )
     db.add(student)
     await db.flush()
-    
+
     # Update username with actual student ID
     student.username = f"{request.display_name.lower().replace(' ', '_')}_{student.id}"
-    
+
     # Update email with student ID
     student_user.email = f"student_{request.display_name.lower().replace(' ', '_')}_{student.id}_{profile.id}@hll.local"
-    
+
     # Create parent-student relationship
     relationship = ParentStudentRelationship(
         parent_id=profile.id,
@@ -355,7 +355,7 @@ async def create_child(
         can_manage_settings=True,
     )
     db.add(relationship)
-    
+
     # Create consent records for the child
     from app.models import ConsentRecord
     consent_types = [
@@ -372,12 +372,12 @@ async def create_child(
             consent_version=consent_version,
         )
         db.add(consent)
-    
+
     # Create default preferences
     from app.models import UserPreference
     prefs = UserPreference(user_id=student_user.id)
     db.add(prefs)
-    
+
     # Create enrollment if stage provided
     if request.current_stage_id:
         from app.models import StudentEnrollment, EnrollmentStatusEnum
@@ -387,10 +387,10 @@ async def create_child(
             status=EnrollmentStatusEnum.ACTIVE,
         )
         db.add(enrollment)
-    
+
     await db.commit()
     await db.refresh(student)
-    
+
     stage = None
     if student.current_stage_id:
         from app.models import LearningStage
@@ -398,7 +398,7 @@ async def create_child(
             select(LearningStage).where(LearningStage.id == student.current_stage_id)
         )
         stage = stage_result.scalar_one_or_none()
-    
+
     return ChildResponse(
         id=student.id,
         display_name=student.display_name,
@@ -427,7 +427,7 @@ async def get_child(
 ):
     """Get child profile with progress summary."""
     profile = await get_parent_profile(db, current_user.id)
-    
+
     # Verify child belongs to this parent
     rel_result = await db.execute(
         select(ParentStudentRelationship)
@@ -437,7 +437,7 @@ async def get_child(
     relationship = rel_result.scalar_one_or_none()
     if not relationship:
         raise NotFoundException("Child not found")
-    
+
     # Load student with stage
     from app.models import StudentProfile, LearningStage
     student_result = await db.execute(
@@ -448,10 +448,10 @@ async def get_child(
     student = student_result.scalar_one_or_none()
     if not student or student.is_deleted:
         raise NotFoundException("Child not found")
-    
+
     progress = calculate_child_progress(student, db)
     stage = student.current_stage
-    
+
     return ChildResponse(
         id=student.id,
         display_name=student.display_name,
@@ -481,7 +481,7 @@ async def update_child(
 ):
     """Update child profile."""
     profile = await get_parent_profile(db, current_user.id)
-    
+
     # Verify child belongs to this parent
     rel_result = await db.execute(
         select(ParentStudentRelationship)
@@ -492,7 +492,7 @@ async def update_child(
     relationship = rel_result.scalar_one_or_none()
     if not relationship:
         raise NotFoundException("Child not found or cannot manage")
-    
+
     # Load student
     from app.models import StudentProfile, LearningStage, GenderEnum
     student_result = await db.execute(
@@ -503,7 +503,7 @@ async def update_child(
     student = student_result.scalar_one_or_none()
     if not student or student.is_deleted:
         raise NotFoundException("Child not found")
-    
+
     # Update fields
     if request.display_name is not None:
         student.display_name = request.display_name
@@ -538,14 +538,14 @@ async def update_child(
     if request.pin is not None:
         from app.core.security import get_password_hash
         student.pin_hash = get_password_hash(request.pin)
-    
+
     await db.commit()
     await db.refresh(student)
-    
+
     # Reload with stage
     stage = student.current_stage
     progress = await calculate_child_progress(student, db)
-    
+
     return ChildResponse(
         id=student.id,
         display_name=student.display_name,
@@ -574,7 +574,7 @@ async def deactivate_child(
 ):
     """Deactivate (soft delete) a child profile."""
     profile = await get_parent_profile(db, current_user.id)
-    
+
     # Verify child belongs to this parent
     rel_result = await db.execute(
         select(ParentStudentRelationship)
@@ -585,7 +585,7 @@ async def deactivate_child(
     relationship = rel_result.scalar_one_or_none()
     if not relationship:
         raise NotFoundException("Child not found or cannot manage")
-    
+
     # Load student
     from app.models import StudentProfile
     student_result = await db.execute(
@@ -594,11 +594,11 @@ async def deactivate_child(
     student = student_result.scalar_one_or_none()
     if not student or student.is_deleted:
         raise NotFoundException("Child not found")
-    
+
     # Soft delete
     student.is_active = False
     student.deleted_at = func.now()
-    
+
     # Also deactivate user
     from app.models import User
     user_result = await db.execute(select(User).where(User.id == student.user_id))
@@ -606,7 +606,7 @@ async def deactivate_child(
     if user:
         user.is_active = False
         user.deleted_at = func.now()
-    
+
     await db.commit()
 
 
@@ -618,7 +618,7 @@ async def get_child_progress(
 ):
     """Get detailed progress report for a child."""
     profile = await get_parent_profile(db, current_user.id)
-    
+
     # Verify child belongs to this parent
     rel_result = await db.execute(
         select(ParentStudentRelationship)
@@ -629,10 +629,10 @@ async def get_child_progress(
     relationship = rel_result.scalar_one_or_none()
     if not relationship:
         raise NotFoundException("Child not found or cannot view progress")
-    
+
     # Load student with stage
     from app.models import StudentProfile, LearningStage, Lesson, StudentLessonProgress, ActivityAttempt, Activity, Subject, Topic, StudentRewardAward
-    
+
     student_result = await db.execute(
         select(StudentProfile)
         .where(StudentProfile.id == child_id)
@@ -641,9 +641,9 @@ async def get_child_progress(
     student = student_result.scalar_one_or_none()
     if not student or student.is_deleted:
         raise NotFoundException("Child not found")
-    
+
     stage = student.current_stage
-    
+
     # Get lesson counts for stage
     if stage:
         total_lessons_result = await db.execute(
@@ -657,7 +657,7 @@ async def get_child_progress(
         total_lessons = total_lessons_result.scalar() or 0
     else:
         total_lessons = 0
-    
+
     # Get progress counts
     completed_result = await db.execute(
         select(func.count(StudentLessonProgress.id))
@@ -665,35 +665,35 @@ async def get_child_progress(
         .where(StudentLessonProgress.status == "completed")
     )
     completed_lessons = completed_result.scalar() or 0
-    
+
     in_progress_result = await db.execute(
         select(func.count(StudentLessonProgress.id))
         .where(StudentLessonProgress.student_id == child_id)
         .where(StudentLessonProgress.status == "in_progress")
     )
     in_progress_lessons = in_progress_result.scalar() or 0
-    
+
     # Activity stats
     total_activities_result = await db.execute(
         select(func.count(ActivityAttempt.id))
         .where(ActivityAttempt.student_id == child_id)
     )
     total_activities = total_activities_result.scalar() or 0
-    
+
     completed_activities_result = await db.execute(
         select(func.count(ActivityAttempt.id))
         .where(ActivityAttempt.student_id == child_id)
         .where(ActivityAttempt.status == "completed")
     )
     completed_activities = completed_activities_result.scalar() or 0
-    
+
     time_result = await db.execute(
         select(func.sum(ActivityAttempt.time_spent_seconds))
         .where(ActivityAttempt.student_id == child_id)
         .where(ActivityAttempt.status == "completed")
     )
     total_time = time_result.scalar() or 0
-    
+
     score_result = await db.execute(
         select(func.avg(ActivityAttempt.score))
         .where(ActivityAttempt.student_id == child_id)
@@ -701,14 +701,14 @@ async def get_child_progress(
         .where(ActivityAttempt.score.is_not(None))
     )
     avg_score = score_result.scalar()
-    
+
     # Rewards earned
     rewards_earned_result = await db.execute(
         select(func.count(StudentRewardAward.id))
         .where(StudentRewardAward.student_id == child_id)
     )
     rewards_earned = rewards_earned_result.scalar() or 0
-    
+
     # Recent activity
     recent_result = await db.execute(
         select(ActivityAttempt, Lesson, Activity)
@@ -720,7 +720,7 @@ async def get_child_progress(
         .limit(10)
     )
     recent = recent_result.all()
-    
+
     recent_activity = [
         {
             "lesson": r.Lesson.title if hasattr(r.Lesson, 'title') else "Unknown",
@@ -731,7 +731,7 @@ async def get_child_progress(
         }
         for r in recent
     ]
-    
+
     return ChildProgressResponse(
         child_id=student.id,
         child_name=student.display_name,
@@ -757,7 +757,7 @@ async def get_child_rewards(
 ):
     """Get all rewards with earned status for a specific child (parent view)."""
     profile = await get_parent_profile(db, current_user.id)
-    
+
     # Verify child belongs to this parent
     rel_result = await db.execute(
         select(ParentStudentRelationship)
@@ -768,10 +768,10 @@ async def get_child_rewards(
     relationship = rel_result.scalar_one_or_none()
     if not relationship:
         raise NotFoundException("Child not found or cannot view progress")
-    
+
     # Load student
     from app.models import StudentProfile, StudentReward, StudentRewardAward
-    
+
     student_result = await db.execute(
         select(StudentProfile)
         .where(StudentProfile.id == child_id)
@@ -780,7 +780,7 @@ async def get_child_rewards(
     student = student_result.scalar_one_or_none()
     if not student or student.is_deleted:
         raise NotFoundException("Child not found")
-    
+
     # Get all rewards with earned status
     rewards_result = await db.execute(
         select(StudentReward)
@@ -788,7 +788,7 @@ async def get_child_rewards(
         .order_by(StudentReward.display_order)
     )
     rewards = rewards_result.scalars().all()
-    
+
     result = []
     for reward in rewards:
         award_result = await db.execute(
@@ -797,7 +797,7 @@ async def get_child_rewards(
             .where(StudentRewardAward.reward_id == reward.id)
         )
         award = award_result.scalar_one_or_none()
-        
+
         result.append({
             "id": reward.id,
             "code": reward.code,
@@ -809,7 +809,7 @@ async def get_child_rewards(
             "earned": award is not None,
             "earned_at": award.earned_at.isoformat() if award else None,
         })
-    
+
     return {
         "child_id": student.id,
         "child_name": student.display_name,

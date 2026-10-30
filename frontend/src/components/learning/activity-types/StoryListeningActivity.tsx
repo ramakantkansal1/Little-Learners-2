@@ -36,6 +36,11 @@ export function StoryListeningActivity(props: ActivityTypeComponentProps): React
     audioEnabled,
     attemptId: _attemptId,
     loading,
+      recommendation,
+      recommendationLoading,
+      recommendationError,
+      startingRecommended,
+      onStartRecommended,
     submitting,
     error,
   } = props;
@@ -54,6 +59,12 @@ export function StoryListeningActivity(props: ActivityTypeComponentProps): React
       onBack: () => window.history.back(),
       onRetry,
       loading,
+      // Recommendation props
+      recommendation,
+      recommendationLoading,
+      recommendationError,
+      startingRecommended,
+      onStartRecommended,
     });
   }
 

@@ -496,12 +496,12 @@ def get_activity_type_for_stage(stage_code: str, activity_index: int, lesson_ind
     import random
     stage_dist = STAGE_ACTIVITY_DISTRIBUTION[stage_code]
     weights = stage_dist["weights"]
-    
+
     # Use deterministic selection based on indices for reproducibility
     # but ensure good distribution across activity types
     types = list(weights.keys())
     weight_values = list(weights.values())
-    
+
     # Use a hash of indices to deterministically select
     seed = hash((stage_code, lesson_index, activity_index)) % 1000
     cumulative = 0
@@ -529,10 +529,10 @@ def select_content_for_activity(atype: ActivityTypeEnum, stage_code: str, activi
     """Select appropriate content for an activity."""
     content_map = ACTIVITY_CONTENT_TEMPLATES.get(atype, {})
     stage_content = content_map.get(stage_code, content_map.get("all", {}))
-    
+
     if not stage_content:
         return {}
-    
+
     keys = list(stage_content.keys())
     key = keys[activity_index % len(keys)]
     return stage_content[key]
@@ -545,82 +545,82 @@ def select_content_for_activity(atype: ActivityTypeEnum, stage_code: str, activi
 async def seed_enhanced_curriculum(db: AsyncSession):
     """Seed enhanced curriculum with all 15 activity types, 2 lessons per topic."""
     print("Starting enhanced curriculum seeding...")
-    
+
     # First, run the base seed to ensure stages, domains, subjects exist
     from app.scripts.seed_data import (
         seed_stages, seed_domains, seed_subjects, seed_roles, seed_rewards
     )
-    
+
     print("Seeding system roles...")
     await seed_roles(db)
-    
+
     print("Seeding learning stages...")
     stages = await seed_stages(db)
     print(f"Created/found {len(stages)} stages")
-    
+
     print("Seeding learning domains...")
     domains = await seed_domains(db, stages)
     total_domains = sum(len(d) for d in domains.values())
     print(f"Created/found {total_domains} domains")
-    
+
     print("Seeding subjects...")
     subjects = await seed_subjects(db, stages, domains)
     total_subjects = sum(len(s) for s in subjects.values())
     print(f"Created/found {total_subjects} subjects")
-    
+
     print("Seeding rewards...")
     await seed_rewards(db)
-    
+
     # Now enhance topics and create 2 lessons per topic with all activity types
     await seed_enhanced_topics_lessons_activities(db, stages, subjects)
-    
+
     await db.commit()
     print("\nEnhanced curriculum seeding completed!")
 
 
 async def seed_enhanced_topics_lessons_activities(
-    db: AsyncSession, 
-    stages: Dict[str, LearningStage], 
+    db: AsyncSession,
+    stages: Dict[str, LearningStage],
     subjects: Dict[str, Dict[str, Subject]]
 ):
     """Seed 2 lessons per topic with diverse activity types."""
     print("Seeding enhanced topics, lessons, and activities...")
-    
+
     lesson_count = 0
     activity_count = 0
     question_count = 0
-    
+
     for stage_code, stage_subjects in subjects.items():
         stage = stages[stage_code]
         stage_dist = STAGE_ACTIVITY_DISTRIBUTION[stage_code]
         lessons_per_topic = stage_dist["lessons_per_topic"]
         activities_per_lesson = stage_dist["activities_per_lesson"]
-        
+
         for subject_code, subject in stage_subjects.items():
             # Get topics for this subject
             topics_result = await db.execute(
                 select(Topic).where(Topic.subject_id == subject.id).order_by(Topic.display_order)
             )
             topics = topics_result.scalars().all()
-            
+
             for topic in topics:
                 # Get or create learning objective
                 obj_result = await db.execute(
                     select(LearningObjective).where(LearningObjective.topic_id == topic.id)
                 )
                 objectives = obj_result.scalars().all()
-                
+
                 # Create lessons_per_topic lessons
                 for lesson_idx in range(lessons_per_topic):
                     lesson_num = lesson_idx + 1
                     lesson_code = f"{topic.code}_lesson_{lesson_num}"
-                    
+
                     # Check if lesson already exists
                     lesson_result = await db.execute(
                         select(Lesson).where(Lesson.topic_id == topic.id, Lesson.code == lesson_code)
                     )
                     lesson = lesson_result.scalar_one_or_none()
-                    
+
                     if not lesson:
                         lesson = Lesson(
                             topic_id=topic.id,
@@ -635,7 +635,7 @@ async def seed_enhanced_topics_lessons_activities(
                         )
                         db.add(lesson)
                         await db.flush()
-                        
+
                         # Link objectives
                         for obj in objectives:
                             link = LessonObjectiveLink(
@@ -644,7 +644,7 @@ async def seed_enhanced_topics_lessons_activities(
                                 display_order=1
                             )
                             db.add(link)
-                        
+
                         # Create lesson translations
                         for lang in ["en", "hi"]:
                             trans_result = await db.execute(
@@ -665,30 +665,30 @@ async def seed_enhanced_topics_lessons_activities(
                                     instructions="Let's start!" if lang == "en" else "शुरू करते हैं!",
                                 )
                                 db.add(translation)
-                        
+
                         lesson_count += 1
                     else:
                         # Update status to published if needed
                         if lesson.status != ContentStatusEnum.PUBLISHED:
                             lesson.status = ContentStatusEnum.PUBLISHED
                             lesson.published_at = datetime.now(timezone.utc)
-                    
+
                     # Create activities for this lesson
                     for act_idx in range(activities_per_lesson):
                         atype = get_activity_type_for_stage(stage_code, act_idx, lesson_idx)
                         act_code = f"{lesson_code}_activity_{act_idx + 1}"
-                        
+
                         # Check if activity exists
                         act_result = await db.execute(
                             select(Activity).where(Activity.lesson_id == lesson.id, Activity.code == act_code)
                         )
                         activity = act_result.scalar_one_or_none()
-                        
+
                         if not activity:
                             # Get config template
                             template_keys = list(ACTIVITY_TYPE_CONFIGS[atype].get("templates", {}).keys())
                             template_key = template_keys[act_idx % len(template_keys)] if template_keys else "default"
-                            
+
                             activity = Activity(
                                 lesson_id=lesson.id,
                                 type=atype,
@@ -704,7 +704,7 @@ async def seed_enhanced_topics_lessons_activities(
                             db.add(activity)
                             await db.flush()
                             activity_count += 1
-                            
+
                             # Create activity translations
                             for lang in ["en", "hi"]:
                                 act_trans_result = await db.execute(
@@ -722,17 +722,17 @@ async def seed_enhanced_topics_lessons_activities(
                                         instructions=get_activity_instructions(atype, stage_code, act_idx, lang),
                                     )
                                     db.add(act_translation)
-                            
+
                             # Create questions for this activity
                             question_templates = QUESTION_TEMPLATES.get(atype, QUESTION_TEMPLATES[ActivityTypeEnum.SIMPLE_QUIZ])
                             num_questions = 2 if stage_code in ["playgroup", "nursery"] else 3
-                            
+
                             for q_idx in range(num_questions):
                                 q_result = await db.execute(
                                     select(Question).where(Question.activity_id == activity.id, Question.display_order == q_idx + 1)
                                 )
                                 question = q_result.scalar_one_or_none()
-                                
+
                                 if not question:
                                     template = question_templates[q_idx % len(question_templates)] if hasattr(QUESTION_TEMPLATES.get(atype, []), '__getitem__') else QUESTION_TEMPLATES[ActivityTypeEnum.SIMPLE_QUIZ][0]
                                     question = Question(
@@ -748,7 +748,7 @@ async def seed_enhanced_topics_lessons_activities(
                                     db.add(question)
                                     await db.flush()
                                     question_count += 1
-                                    
+
                                     # Create question translations
                                     for lang in ["en", "hi"]:
                                         q_trans_result = await db.execute(
@@ -765,11 +765,11 @@ async def seed_enhanced_topics_lessons_activities(
                                                 prompt=template[lang] if lang in template else template["en"],
                                             )
                                             db.add(q_translation)
-                                    
+
                                     # Create answer options
                                     content = select_content_for_activity(atype, stage_code, 0)
                                     await create_answer_options(db, question, atype, content, stage_code)
-    
+
     print(f"Created {lesson_count} new lessons, {activity_count} new activities, {question_count} new questions")
 
 
@@ -865,15 +865,15 @@ def get_activity_instructions(atype: ActivityTypeEnum, stage_code: str, activity
 async def create_answer_options(db: AsyncSession, question: Question, atype: ActivityTypeEnum, content: Dict[str, Any], stage_code: str):
     """Create answer options for a question based on activity type and content."""
     num_options = 3
-    
+
     # Get correct answer from content or use default
     correct_index = content.get("correct", 0) if content else 0
-    
+
     # Generate options based on activity type
     for m in range(num_options):
         is_correct = (m == correct_index)
         option_text = get_option_text(atype, content, m, is_correct)
-        
+
         option = AnswerOption(
             question_id=question.id,
             text=option_text,
@@ -886,7 +886,7 @@ async def create_answer_options(db: AsyncSession, question: Question, atype: Act
         )
         db.add(option)
         await db.flush()  # Flush to get the option ID
-        
+
         # Create translations after flush so option.id is available
         for lang in ["en", "hi"]:
             opt_trans = AnswerOptionTranslation(
@@ -903,7 +903,7 @@ def get_option_text(atype: ActivityTypeEnum, content: Dict[str, Any], index: int
     """Generate option text based on activity type and content."""
     if content and "options" in content and index < len(content["options"]):
         return content["options"][index]
-    
+
     # Default options per activity type
     defaults = {
         ActivityTypeEnum.IMAGE_SELECTION: ["Option A", "Option B", "Option C"],
@@ -929,7 +929,7 @@ async def main():
     """Main enhanced seeding function."""
     print("Starting Stage 5D Enhanced Curriculum Seeding...")
     print(f"Database: {settings.database_url}")
-    
+
     async with async_session_factory() as db:
         try:
             await seed_enhanced_curriculum(db)

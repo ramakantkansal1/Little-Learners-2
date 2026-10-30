@@ -1,7 +1,7 @@
 import { Link, useParams, useLocation, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { studentApi, type AnswerSubmitResponse } from '@services/api';
+import { studentApi, type AnswerSubmitResponse, type NextActivityRecommendation, type AttemptCompleteResponse } from '@services/api';
 import { ActivityRenderer, type ActivityTypeComponentProps } from '@/components/learning/ActivityRenderer';
 import type { ActivityType } from '@/types';
 
@@ -38,12 +38,12 @@ export default function ActivityPage() {
   const { activityId } = useParams<{ activityId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
-  
+
   const [activity, setActivity] = useState<ActivityData | null>(null);
   const [attemptId, setAttemptId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -59,13 +59,22 @@ export default function ActivityPage() {
     last_activity_at: string | null;
   } | null>(null);
 
+  // Recommendation state
+  const [recommendation, setRecommendation] = useState<NextActivityRecommendation | null>(null);
+  const [recommendationLoading, setRecommendationLoading] = useState(false);
+  const [recommendationError, setRecommendationError] = useState<string | null>(null);
+  const [startingRecommended, setStartingRecommended] = useState(false);
+
   // Parse search params from location.search directly to ensure reactivity
   const searchParams = new URLSearchParams(location.search);
   const attemptIdParam = searchParams.get('attempt');
-  
+
   // Debug: render counter
   const renderCount = useRef(0);
   renderCount.current++;
+
+  // Ref to prevent duplicate recommendation starts (synchronous guard)
+  const startingRecommendedRef = useRef(false);
 
   const loadActivityData = useCallback(async () => {
     if (!activityId) return;
@@ -73,7 +82,7 @@ export default function ActivityPage() {
     setError(null);
     try {
       let attemptIdToUse = attemptIdParam ? parseInt(attemptIdParam, 10) : null;
-      
+
       let activityResponse;
       if (attemptIdToUse) {
         // Use existing attempt - GET endpoint
@@ -85,21 +94,21 @@ export default function ActivityPage() {
         navigate(`/student/activity/${activityId}?attempt=${response.data.attempt_id}`, { replace: true });
         activityResponse = response;
       }
-      
+
       setAttemptId(attemptIdToUse);
-      
+
       const activityData = activityResponse.data.activity;
       const responseData = activityResponse.data as { saved_progress?: { current_question_index?: number; selected_answer_id?: number; accumulated_score?: number }; lesson_progress?: { completion_percentage?: number; status?: string; last_activity_at?: string | null } };
       const savedProgress = responseData.saved_progress;
       const lp = responseData.lesson_progress;
-      
+
       // Restore in-progress state from saved attempt metadata (resumption support)
       if (savedProgress) {
         setCurrentQuestion(savedProgress.current_question_index ?? 0);
         setSelectedAnswer(savedProgress.selected_answer_id ?? null);
         setScore(savedProgress.accumulated_score ?? 0);
       }
-      
+
       // Set lesson progress from backend
       if (lp) {
         setLessonProgress({
@@ -108,7 +117,7 @@ export default function ActivityPage() {
           last_activity_at: lp.last_activity_at ?? null,
         });
       }
-      
+
       setActivity({
         id: activityData.id,
         type: activityData.type as ActivityType,
@@ -149,20 +158,20 @@ export default function ActivityPage() {
 
   const handleAnswer = async (answerId: number) => {
     if (showFeedback || submitting || !attemptId || !activity) return;
-    
+
     setSubmitting(true);
     setSelectedAnswer(answerId);
-    
+
     try {
       const question = activity.questions[currentQuestion];
       const response = await studentApi.submitAnswer(attemptId, question.id, [answerId]);
       const answerResult: AnswerSubmitResponse = response.data;
-      
+
       setIsCorrect(answerResult.is_correct);
       if (answerResult.is_correct) setScore(prev => prev + 1);
       setCorrectOptionIds(answerResult.correct_options);
       setShowFeedback(true);
-      
+
       // Update lesson progress from backend response
       if (answerResult.lesson_progress) {
         setLessonProgress({
@@ -180,8 +189,8 @@ export default function ActivityPage() {
     }
   };
 
-  const handleNext = () => {
-    if (!activity) return;
+  const handleNext = async () => {
+    if (!activity || !attemptId) return;
     if (currentQuestion < activity.questions.length - 1) {
       setCurrentQuestion(prev => prev + 1);
       setSelectedAnswer(null);
@@ -189,7 +198,75 @@ export default function ActivityPage() {
       setIsCorrect(false);
       setCorrectOptionIds([]);
     } else {
+      // Last question - complete the attempt and fetch recommendation
+      await completeAttemptAndFetchRecommendation();
+    }
+  };
+
+  const completeAttemptAndFetchRecommendation = async () => {
+    if (!attemptId || !activity) return;
+
+    try {
+      setSubmitting(true);
+      setRecommendationError(null);
+
+      // Complete the attempt
+      const completeResponse = await studentApi.completeAttempt(attemptId);
+      const completeData: AttemptCompleteResponse = completeResponse.data;
+
+      // Fetch the next activity recommendation
+      setRecommendationLoading(true);
+      try {
+        const recResponse = await studentApi.getNextActivity();
+        setRecommendation(recResponse.data);
+      } catch (recErr) {
+        console.error('Failed to fetch recommendation:', recErr);
+        // Don't block completion on recommendation failure
+        setRecommendationError('Could not load next activity recommendation');
+        setRecommendation(null);
+      } finally {
+        setRecommendationLoading(false);
+      }
+
+      // Update lesson progress from completion response if available
+      if (completeData.streak) {
+        // Streak info is available but we don't have a streak display yet
+      }
+
       setCompleted(true);
+    } catch (err) {
+      console.error('Failed to complete attempt:', err);
+      setRecommendationError('Failed to complete activity. Please try again.');
+      // Still allow viewing completion screen locally
+      setCompleted(true);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleStartRecommended = async () => {
+    if (!recommendation?.activity_id || startingRecommended) return;
+
+    // Use a ref to prevent duplicate calls synchronously (state updates are async)
+    if (startingRecommendedRef.current) return;
+    startingRecommendedRef.current = true;
+
+    setStartingRecommended(true);
+    setRecommendationError(null);
+
+    try {
+      // Start a new attempt for the recommended activity
+      const response = await studentApi.startActivityAttempt(recommendation.activity_id);
+      const newAttemptId = response.data.attempt_id;
+
+      // Navigate to the new activity with the new attempt ID
+      navigate(`/student/activity/${recommendation.activity_id}?attempt=${newAttemptId}`, { replace: true });
+    } catch (err) {
+      console.error('Failed to start recommended activity:', err);
+      setRecommendationError('Failed to start the recommended activity. Please try again.');
+    } finally {
+      setStartingRecommended(false);
+      startingRecommendedRef.current = false;
     }
   };
 
@@ -210,10 +287,10 @@ export default function ActivityPage() {
       const response = await studentApi.startActivityAttempt(activity.id);
       setAttemptId(response.data.attempt_id);
       navigate(`/student/activity/${activity.id}?attempt=${response.data.attempt_id}`, { replace: true });
-      
+
       const activityResponse = await studentApi.startActivityAttempt(activity.id);
       const activityData = activityResponse.data.activity;
-      
+
       setActivity({
         id: activityData.id,
         type: activityData.type as ActivityType,
@@ -239,7 +316,7 @@ export default function ActivityPage() {
           })),
         })),
       });
-      
+
       setCurrentQuestion(0);
       setSelectedAnswer(null);
       setShowFeedback(false);
@@ -331,6 +408,12 @@ export default function ActivityPage() {
     loading,
     submitting,
     error,
+    // Recommendation props
+    recommendation,
+    recommendationLoading,
+    recommendationError,
+    startingRecommended,
+    onStartRecommended: handleStartRecommended,
   };
 
   // Render the activity type component via the ActivityRenderer dispatcher

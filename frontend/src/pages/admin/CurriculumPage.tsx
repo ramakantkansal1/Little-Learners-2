@@ -1284,6 +1284,16 @@ export default function CurriculumPage() {
                         <option value="archived">Archived</option>
                       </select>
                     </div>
+                    <div>
+                      <label className="label">Difficulty Tier</label>
+                      <select className="input" value={formData.configuration?.difficulty_tier ? String(formData.configuration.difficulty_tier) : ''} onChange={(e) => handleInputChange('configuration', { ...formData.configuration, difficulty_tier: e.target.value ? parseInt(e.target.value) : null })}>
+                        <option value="">Auto (based on curriculum order)</option>
+                        <option value="1">Easy (Tier 1)</option>
+                        <option value="2">Medium (Tier 2)</option>
+                        <option value="3">Hard (Tier 3)</option>
+                      </select>
+                      <p className="text-sm text-gray-500 mt-1">Used by adaptive recommendation. Auto uses curriculum sequence.</p>
+                    </div>
                     <div className="col-span-2">
                       <label className="label">Configuration (JSON)</label>
                       <textarea className="input font-mono text-sm h-32" value={JSON.stringify(formData.configuration, null, 2)} onChange={(e) => { try { const parsed = JSON.parse(e.target.value); handleInputChange('configuration', parsed); } catch { /* Ignore invalid JSON input */ } }} placeholder='{}' />
@@ -1472,6 +1482,16 @@ export default function CurriculumPage() {
                         <option value="published">Published</option>
                         <option value="archived">Archived</option>
                       </select>
+                    </div>
+                    <div>
+                      <label className="label">Difficulty Tier</label>
+                      <select className="input" value={formData.configuration?.difficulty_tier ? String(formData.configuration.difficulty_tier) : ''} onChange={(e) => handleInputChange('configuration', { ...formData.configuration, difficulty_tier: e.target.value ? parseInt(e.target.value) : null })}>
+                        <option value="">Auto (based on curriculum order)</option>
+                        <option value="1">Easy (Tier 1)</option>
+                        <option value="2">Medium (Tier 2)</option>
+                        <option value="3">Hard (Tier 3)</option>
+                      </select>
+                      <p className="text-sm text-gray-500 mt-1">Used by adaptive recommendation. Auto uses curriculum sequence.</p>
                     </div>
                   </div>
                   <div>

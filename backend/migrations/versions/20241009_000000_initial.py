@@ -2,7 +2,7 @@
 Initial migration - Create all tables for Happy Little Learners.
 
 Revision ID: 20241009_000000
-Revises: 
+Revises:
 Create Date: 2024-10-09 00:00:00.000000
 """
 from alembic import op

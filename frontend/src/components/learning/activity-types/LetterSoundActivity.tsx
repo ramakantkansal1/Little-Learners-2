@@ -37,6 +37,11 @@ export function LetterSoundActivity(props: ActivityTypeComponentProps): React.Re
     audioEnabled,
     attemptId: _attemptId,
     loading,
+      recommendation,
+      recommendationLoading,
+      recommendationError,
+      startingRecommended,
+      onStartRecommended,
     submitting,
     error,
   } = props;
@@ -55,6 +60,12 @@ export function LetterSoundActivity(props: ActivityTypeComponentProps): React.Re
       onBack: () => window.history.back(),
       onRetry,
       loading,
+      // Recommendation props
+      recommendation,
+      recommendationLoading,
+      recommendationError,
+      startingRecommended,
+      onStartRecommended,
     });
   }
 

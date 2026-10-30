@@ -22,7 +22,7 @@ def upgrade() -> None:
         'user_preferences',
         sa.Column('student_id', sa.BigInteger(), nullable=True, unique=True)
     )
-    
+
     # Add foreign key constraint
     op.create_foreign_key(
         'fk_user_preferences_student_id',
@@ -30,7 +30,7 @@ def upgrade() -> None:
         ['student_id'], ['id'],
         ondelete='SET NULL'
     )
-    
+
     # Add index for student_id
     op.create_index('ix_user_preferences_student_id', 'user_preferences', ['student_id'], unique=True)
 
@@ -38,9 +38,9 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Drop foreign key constraint
     op.drop_constraint('fk_user_preferences_student_id', 'user_preferences', type_='foreignkey')
-    
+
     # Drop index
     op.drop_index('ix_user_preferences_student_id', table_name='user_preferences')
-    
+
     # Drop column
     op.drop_column('user_preferences', 'student_id')
