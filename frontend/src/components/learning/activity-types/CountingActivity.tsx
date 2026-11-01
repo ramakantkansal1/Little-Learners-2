@@ -1,4 +1,4 @@
-import { ActivityTypeComponentProps } from '../ActivityRenderer';
+import { ActivityTypeComponentProps } from "../ActivityRenderer";
 import {
   renderActivityHeader,
   renderProgress,
@@ -9,16 +9,18 @@ import {
   renderCompletionScreen,
   renderLoading,
   renderError,
-} from './BaseActivityComponents';
+} from "./BaseActivityComponents";
 
 /**
  * Counting Activity Component.
  * Used for: counting
- * 
+ *
  * Shows a set of objects and asks to count them.
  * Options are numbers.
  */
-export function CountingActivity(props: ActivityTypeComponentProps): React.ReactElement {
+export function CountingActivity(
+  props: ActivityTypeComponentProps,
+): React.ReactElement {
   const {
     activity,
     currentQuestion,
@@ -37,20 +39,24 @@ export function CountingActivity(props: ActivityTypeComponentProps): React.React
     audioEnabled,
     attemptId: _attemptId,
     loading,
-      recommendation,
-      recommendationLoading,
-      recommendationError,
-      startingRecommended,
-      onStartRecommended,
+    recommendation,
+    recommendationLoading,
+    recommendationError,
+    startingRecommended,
+    onStartRecommended,
     submitting,
     error,
   } = props;
 
   if (loading) return renderLoading();
-  if (error || !activity) return renderError({ error: error || 'Activity not found', onRetry });
+  if (error || !activity)
+    return renderError({ error: error || "Activity not found", onRetry });
 
   if (completed) {
-    const percentage = activity.questions.length > 0 ? Math.round((score / activity.questions.length) * 100) : 0;
+    const percentage =
+      activity.questions.length > 0
+        ? Math.round((score / activity.questions.length) * 100)
+        : 0;
     const earnedStar = percentage >= 80;
     return renderCompletionScreen({
       activity,
@@ -70,10 +76,12 @@ export function CountingActivity(props: ActivityTypeComponentProps): React.React
   }
 
   const question = activity.questions[currentQuestion];
-  const questionTypeLabel = activity.questions[0]?.question_type.replace('_', ' ') || 'Counting';
+  const questionTypeLabel =
+    activity.questions[0]?.question_type.replace("_", " ") || "Counting";
 
   // Get objects to count from configuration
-  const objectsToCount = question.configuration?.objects as Array<{ emoji: string; count?: number }> | undefined;
+  const objectsToCount = question.configuration?.objects as
+    Array<{ emoji: string; count?: number }> | undefined;
   const objectEmoji = question.configuration?.objectEmoji as string | undefined;
   const totalCount = question.configuration?.totalCount as number | undefined;
 
@@ -91,24 +99,29 @@ export function CountingActivity(props: ActivityTypeComponentProps): React.React
 
       <div className="card p-6">
         <div className="text-center mb-6">
-          <div className="text-2xl font-semibold text-gray-700 mb-4">Count the objects:</div>
+          <div className="text-2xl font-semibold text-gray-700 mb-4">
+            Count the objects:
+          </div>
           <div className="flex flex-wrap justify-center gap-2">
             {objectsToCount?.map((obj, idx) => (
-              <span key={idx} className="text-5xl">{obj.emoji || '🔴'}</span>
-            )) || (
+              <span key={idx} className="text-5xl">
+                {obj.emoji || "🔴"}
+              </span>
+            )) ||
               Array.from({ length: totalCount || 5 }).map((_, idx) => (
-                <span key={idx} className="text-5xl">{objectEmoji || '🍎'}</span>
-              ))
-            )}
+                <span key={idx} className="text-5xl">
+                  {objectEmoji || "🍎"}
+                </span>
+              ))}
           </div>
         </div>
 
-        {renderQuestionPrompt({ 
+        {renderQuestionPrompt({
           prompt: question.prompt,
         })}
 
         <div className="grid grid-cols-3 gap-3">
-          {question.options.map((option) => (
+          {question.options.map((option) =>
             renderOptionButton({
               option,
               isSelected: selectedAnswer === option.id,
@@ -124,8 +137,8 @@ export function CountingActivity(props: ActivityTypeComponentProps): React.React
                   </div>
                 </div>
               ),
-            })
-          ))}
+            }),
+          )}
         </div>
 
         {showFeedback && renderFeedback({ isCorrect })}

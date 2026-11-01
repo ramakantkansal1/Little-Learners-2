@@ -31,7 +31,7 @@ export interface LanguageOption {
 export interface User {
   id: number;
   email: string | null;
-  role: 'admin' | 'parent' | 'student';
+  role: "admin" | "parent" | "student";
   is_verified: boolean;
   is_active: boolean;
   last_login_at: string | null;
@@ -47,7 +47,7 @@ export interface UserRole {
 
 export interface Role {
   id: number;
-  name: 'admin' | 'parent' | 'student';
+  name: "admin" | "parent" | "student";
   description: string | null;
   is_system: boolean;
 }
@@ -59,7 +59,7 @@ export interface ParentProfile extends BaseEntity {
   phone_number: string | null;
   phone_verified: boolean;
   date_of_birth: string | null;
-  gender: 'male' | 'female' | 'other' | 'prefer_not_to_say' | null;
+  gender: "male" | "female" | "other" | "prefer_not_to_say" | null;
   avatar_url: string | null;
   address: string | null;
   city: string | null;
@@ -73,7 +73,7 @@ export interface StudentProfile extends BaseEntity {
   user_id: number;
   display_name: string;
   date_of_birth: string | null;
-  gender: 'male' | 'female' | 'other' | 'prefer_not_to_say' | null;
+  gender: "male" | "female" | "other" | "prefer_not_to_say" | null;
   avatar_url: string | null;
   avatar_type: string | null;
   current_stage_id: number | null;
@@ -154,7 +154,7 @@ export interface LearningObjective extends BaseEntity {
 export interface Lesson extends BaseEntity {
   topic_id: number;
   code: string;
-  status: 'draft' | 'review' | 'published' | 'archived';
+  status: "draft" | "review" | "published" | "archived";
   version: number;
   estimated_duration_minutes: number | null;
   thumbnail_url: string | null;
@@ -180,7 +180,7 @@ export interface Activity extends BaseEntity {
   lesson_id: number;
   type: ActivityType;
   code: string;
-  status: 'draft' | 'review' | 'published' | 'archived';
+  status: "draft" | "review" | "published" | "archived";
   version: number;
   display_order: number;
   estimated_duration_minutes: number | null;
@@ -241,28 +241,28 @@ export interface AnswerOptionTranslation extends BaseEntity {
 }
 
 export type ActivityType =
-  | 'image_selection'
-  | 'color_identification'
-  | 'shape_matching'
-  | 'picture_matching'
-  | 'alphabet_recognition'
-  | 'letter_sound'
-  | 'number_recognition'
-  | 'counting'
-  | 'sorting'
-  | 'sequencing'
-  | 'tracing'
-  | 'story_listening'
-  | 'picture_comprehension'
-  | 'simple_quiz'
-  | 'audio_identification';
+  | "image_selection"
+  | "color_identification"
+  | "shape_matching"
+  | "picture_matching"
+  | "alphabet_recognition"
+  | "letter_sound"
+  | "number_recognition"
+  | "counting"
+  | "sorting"
+  | "sequencing"
+  | "tracing"
+  | "story_listening"
+  | "picture_comprehension"
+  | "simple_quiz"
+  | "audio_identification";
 
 // Progress types
 export interface StudentEnrollment extends BaseEntity {
   student_id: number;
   stage_id: number;
   subject_id: number | null;
-  status: 'active' | 'completed' | 'paused' | 'withdrawn';
+  status: "active" | "completed" | "paused" | "withdrawn";
   enrolled_at: string;
   completed_at: string | null;
   assigned_by: number | null;
@@ -272,7 +272,7 @@ export interface StudentEnrollment extends BaseEntity {
 export interface StudentLessonProgress extends BaseEntity {
   student_id: number;
   lesson_id: number;
-  status: 'not_started' | 'in_progress' | 'completed' | 'needs_review';
+  status: "not_started" | "in_progress" | "completed" | "needs_review";
   started_at: string | null;
   completed_at: string | null;
   last_activity_at: string | null;
@@ -286,7 +286,7 @@ export interface ActivityAttempt extends BaseEntity {
   activity_id: number;
   lesson_progress_id: number | null;
   attempt_number: number;
-  status: 'started' | 'in_progress' | 'completed' | 'abandoned';
+  status: "started" | "in_progress" | "completed" | "abandoned";
   started_at: string;
   completed_at: string | null;
   time_spent_seconds: number;
@@ -310,7 +310,7 @@ export interface StudentReward extends BaseEntity {
   code: string;
   name: string;
   description: string | null;
-  reward_type: 'star' | 'sticker' | 'badge' | 'certificate';
+  reward_type: "star" | "sticker" | "badge" | "certificate";
   image_url: string | null;
   criteria: Record<string, unknown> | null;
   points_value: number;
@@ -332,7 +332,7 @@ export interface MediaAsset extends BaseEntity {
   original_name: string;
   file_path: string;
   file_url: string | null;
-  media_type: 'image' | 'audio' | 'video' | 'document';
+  media_type: "image" | "audio" | "video" | "document";
   mime_type: string;
   file_size: number;
   width: number | null;
@@ -373,7 +373,7 @@ export interface UserPreference extends BaseEntity {
   narration_speed: number;
   reduced_motion: boolean;
   high_contrast: boolean;
-  font_size: 'small' | 'medium' | 'large';
+  font_size: "small" | "medium" | "large";
   screen_reader_optimized: boolean;
   email_notifications: boolean;
   sms_notifications: boolean;

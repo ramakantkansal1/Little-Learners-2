@@ -1,4 +1,4 @@
-import { ActivityTypeComponentProps } from '../ActivityRenderer';
+import { ActivityTypeComponentProps } from "../ActivityRenderer";
 import {
   renderActivityHeader,
   renderProgress,
@@ -9,16 +9,18 @@ import {
   renderCompletionScreen,
   renderLoading,
   renderError,
-} from './BaseActivityComponents';
+} from "./BaseActivityComponents";
 
 /**
  * Shape Matching Activity Component.
  * Used for: shape_matching
- * 
+ *
  * Shows a shape and asks to find the matching shape.
  * Options are different shapes.
  */
-export function ShapeMatchingActivity(props: ActivityTypeComponentProps): React.ReactElement {
+export function ShapeMatchingActivity(
+  props: ActivityTypeComponentProps,
+): React.ReactElement {
   const {
     activity,
     currentQuestion,
@@ -37,20 +39,24 @@ export function ShapeMatchingActivity(props: ActivityTypeComponentProps): React.
     audioEnabled,
     attemptId: _attemptId,
     loading,
-      recommendation,
-      recommendationLoading,
-      recommendationError,
-      startingRecommended,
-      onStartRecommended,
+    recommendation,
+    recommendationLoading,
+    recommendationError,
+    startingRecommended,
+    onStartRecommended,
     submitting,
     error,
   } = props;
 
   if (loading) return renderLoading();
-  if (error || !activity) return renderError({ error: error || 'Activity not found', onRetry });
+  if (error || !activity)
+    return renderError({ error: error || "Activity not found", onRetry });
 
   if (completed) {
-    const percentage = activity.questions.length > 0 ? Math.round((score / activity.questions.length) * 100) : 0;
+    const percentage =
+      activity.questions.length > 0
+        ? Math.round((score / activity.questions.length) * 100)
+        : 0;
     const earnedStar = percentage >= 80;
     return renderCompletionScreen({
       activity,
@@ -70,31 +76,39 @@ export function ShapeMatchingActivity(props: ActivityTypeComponentProps): React.
   }
 
   const question = activity.questions[currentQuestion];
-  const questionTypeLabel = activity.questions[0]?.question_type.replace('_', ' ') || 'Shape Matching';
+  const questionTypeLabel =
+    activity.questions[0]?.question_type.replace("_", " ") || "Shape Matching";
 
   // Get target shape from configuration
   const targetShape = question.configuration?.targetShape as string | undefined;
-  const _targetShapeEmoji = question.configuration?.targetShapeEmoji as string | undefined;
+  const _targetShapeEmoji = question.configuration?.targetShapeEmoji as
+    string | undefined;
   void _targetShapeEmoji;
-  const targetShapeSvg = question.configuration?.targetShapeSvg as string | undefined;
+  const targetShapeSvg = question.configuration?.targetShapeSvg as
+    string | undefined;
 
   // Shape emoji mapping
   const shapeEmojis: Record<string, string> = {
-    circle: '⭕',
-    square: '⬜',
-    triangle: '🔺',
-    rectangle: '🟦',
-    star: '⭐',
-    heart: '❤️',
-    diamond: '💎',
-    oval: '⭕',
+    circle: "⭕",
+    square: "⬜",
+    triangle: "🔺",
+    rectangle: "🟦",
+    star: "⭐",
+    heart: "❤️",
+    diamond: "💎",
+    oval: "⭕",
   };
 
   const renderShape = (shape: string, size: number = 80) => {
     if (targetShapeSvg) {
-      return <div dangerouslySetInnerHTML={{ __html: targetShapeSvg }} style={{ width: size, height: size }} />;
+      return (
+        <div
+          dangerouslySetInnerHTML={{ __html: targetShapeSvg }}
+          style={{ width: size, height: size }}
+        />
+      );
     }
-    const emoji = shapeEmojis[shape.toLowerCase()] || '❓';
+    const emoji = shapeEmojis[shape.toLowerCase()] || "❓";
     return <span className="text-7xl">{emoji}</span>;
   };
 
@@ -112,18 +126,20 @@ export function ShapeMatchingActivity(props: ActivityTypeComponentProps): React.
 
       <div className="card p-6">
         <div className="text-center mb-6">
-          <div className="text-2xl font-semibold text-gray-700 mb-4">Find the matching shape:</div>
+          <div className="text-2xl font-semibold text-gray-700 mb-4">
+            Find the matching shape:
+          </div>
           <div className="flex justify-center">
-            {renderShape(targetShape || 'circle', 120)}
+            {renderShape(targetShape || "circle", 120)}
           </div>
         </div>
 
-        {renderQuestionPrompt({ 
+        {renderQuestionPrompt({
           prompt: question.prompt,
         })}
 
         <div className="grid grid-cols-2 gap-4">
-          {question.options.map((option) => (
+          {question.options.map((option) =>
             renderOptionButton({
               option,
               isSelected: selectedAnswer === option.id,
@@ -133,20 +149,24 @@ export function ShapeMatchingActivity(props: ActivityTypeComponentProps): React.
               onClick: () => onAnswer(option.id),
               disabled: showFeedback || submitting,
               renderOptionContent: (): React.ReactNode => {
-                const optionShape = option.configuration?.shape as string | undefined;
-                const _optionShapeSvg = option.configuration?.shapeSvg as string | undefined;
+                const optionShape = option.configuration?.shape as
+                  string | undefined;
+                const _optionShapeSvg = option.configuration?.shapeSvg as
+                  string | undefined;
                 void _optionShapeSvg;
                 return (
                   <div className="flex flex-col items-center gap-2">
                     <div className="w-28 h-28 rounded-xl bg-gray-50 flex items-center justify-center border-2 border-gray-200">
-                      {renderShape(optionShape || 'circle', 80)}
+                      {renderShape(optionShape || "circle", 80)}
                     </div>
-                    <p className="font-medium text-gray-900 text-center">{option.text}</p>
+                    <p className="font-medium text-gray-900 text-center">
+                      {option.text}
+                    </p>
                   </div>
                 );
               },
-            })
-          ))}
+            }),
+          )}
         </div>
 
         {showFeedback && renderFeedback({ isCorrect })}

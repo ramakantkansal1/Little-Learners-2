@@ -1,9 +1,4 @@
-export { 
-  api, 
-  extractData, 
-  handleApiError, 
-  type ApiError 
-} from './api';
+export { api, extractData, handleApiError, type ApiError } from "./api";
 
 export {
   curriculumApi,
@@ -13,7 +8,7 @@ export {
   type Topic,
   type Lesson,
   type Activity,
-} from './api';
+} from "./api";
 
 export {
   parentApi,
@@ -22,7 +17,7 @@ export {
   type ChildCreateRequest,
   type ChildUpdateRequest,
   type ChildProgress,
-} from './api';
+} from "./api";
 
 export {
   studentApi,
@@ -35,14 +30,14 @@ export {
   type AttemptCompleteResponse,
   type Reward,
   type HistoryItem,
-} from './api';
+} from "./api";
 
 export {
   progressApi,
   type Enrollment,
   type LessonProgress,
   type ActivityAttempt,
-} from './api';
+} from "./api";
 
 export {
   adminApi,
@@ -53,9 +48,6 @@ export {
   type AdminActivity,
   type AnalyticsData,
   type AuditLog,
-} from './api';
+} from "./api";
 
-export {
-  mediaApi,
-  type MediaAsset,
-} from './api';
+export { mediaApi, type MediaAsset } from "./api";

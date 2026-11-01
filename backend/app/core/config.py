@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     DB_USER: str = "root"
     DB_PASSWORD: str = ""
     DB_CHARSET: str = "utf8mb4"
+    MYSQL_ROOT_PASSWORD: str = ""
 
     # Database URL (optional - if provided, individual params are ignored)
     DATABASE_URL: Optional[str] = None

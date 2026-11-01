@@ -1,4 +1,4 @@
-import { ActivityTypeComponentProps } from '../ActivityRenderer';
+import { ActivityTypeComponentProps } from "../ActivityRenderer";
 import {
   renderActivityHeader,
   renderProgress,
@@ -9,16 +9,18 @@ import {
   renderCompletionScreen,
   renderLoading,
   renderError,
-} from './BaseActivityComponents';
+} from "./BaseActivityComponents";
 
 /**
  * Picture Matching Activity Component.
  * Used for: picture_matching, shape_matching, color_identification
- * 
+ *
  * Shows a target image/item and options to match with it.
  * The prompt typically says "Match the shape" or "Find the same color"
  */
-export function PictureMatchingActivity(props: ActivityTypeComponentProps): React.ReactElement {
+export function PictureMatchingActivity(
+  props: ActivityTypeComponentProps,
+): React.ReactElement {
   const {
     activity,
     currentQuestion,
@@ -37,20 +39,24 @@ export function PictureMatchingActivity(props: ActivityTypeComponentProps): Reac
     audioEnabled,
     attemptId: _attemptId,
     loading,
-      recommendation,
-      recommendationLoading,
-      recommendationError,
-      startingRecommended,
-      onStartRecommended,
+    recommendation,
+    recommendationLoading,
+    recommendationError,
+    startingRecommended,
+    onStartRecommended,
     submitting,
     error,
   } = props;
 
   if (loading) return renderLoading();
-  if (error || !activity) return renderError({ error: error || 'Activity not found', onRetry });
+  if (error || !activity)
+    return renderError({ error: error || "Activity not found", onRetry });
 
   if (completed) {
-    const percentage = activity.questions.length > 0 ? Math.round((score / activity.questions.length) * 100) : 0;
+    const percentage =
+      activity.questions.length > 0
+        ? Math.round((score / activity.questions.length) * 100)
+        : 0;
     const earnedStar = percentage >= 80;
     return renderCompletionScreen({
       activity,
@@ -70,13 +76,16 @@ export function PictureMatchingActivity(props: ActivityTypeComponentProps): Reac
   }
 
   const question = activity.questions[currentQuestion];
-  const questionTypeLabel = activity.questions[0]?.question_type.replace('_', ' ') || 'Activity';
+  const questionTypeLabel =
+    activity.questions[0]?.question_type.replace("_", " ") || "Activity";
 
   // Get the target from question configuration
   const targetImage = question.configuration?.targetImage as string | undefined;
   const targetEmoji = question.configuration?.targetEmoji as string | undefined;
   const targetText = question.configuration?.targetText as string | undefined;
-  const _matchType = question.configuration?.matchType as 'exact' | 'category' | 'color' | 'shape' | undefined || 'exact';
+  const _matchType =
+    (question.configuration?.matchType as
+      "exact" | "category" | "color" | "shape" | undefined) || "exact";
   // _matchType is reserved for future matching logic
   void _matchType;
 
@@ -94,31 +103,35 @@ export function PictureMatchingActivity(props: ActivityTypeComponentProps): Reac
 
       <div className="card p-6">
         <div className="text-center mb-6">
-          <div className="text-2xl font-semibold text-gray-700 mb-2">Find the match:</div>
+          <div className="text-2xl font-semibold text-gray-700 mb-2">
+            Find the match:
+          </div>
           <div className="flex justify-center">
             {targetImage ? (
-              <img 
-                src={targetImage} 
-                alt={targetText || 'Target'}
+              <img
+                src={targetImage}
+                alt={targetText || "Target"}
                 className="w-32 h-32 object-contain rounded-xl bg-gray-50 p-4"
               />
             ) : targetEmoji ? (
               <span className="text-7xl">{targetEmoji}</span>
             ) : (
               <div className="w-32 h-32 rounded-xl bg-primary-100 flex items-center justify-center">
-                <span className="text-4xl font-bold text-primary-600">{targetText || '?'}</span>
+                <span className="text-4xl font-bold text-primary-600">
+                  {targetText || "?"}
+                </span>
               </div>
             )}
           </div>
         </div>
 
-        {renderQuestionPrompt({ 
+        {renderQuestionPrompt({
           prompt: question.prompt,
           promptEmoji: undefined,
         })}
 
         <div className="grid grid-cols-2 gap-4">
-          {question.options.map((option) => (
+          {question.options.map((option) =>
             renderOptionButton({
               option,
               isSelected: selectedAnswer === option.id,
@@ -130,8 +143,8 @@ export function PictureMatchingActivity(props: ActivityTypeComponentProps): Reac
               renderOptionContent: () => (
                 <div className="flex flex-col items-center gap-2">
                   {option.image_url ? (
-                    <img 
-                      src={option.image_url} 
+                    <img
+                      src={option.image_url}
                       alt={option.text}
                       className="w-24 h-24 object-contain rounded-lg bg-gray-50"
                     />
@@ -140,11 +153,13 @@ export function PictureMatchingActivity(props: ActivityTypeComponentProps): Reac
                   ) : (
                     <span className="text-5xl">{option.text}</span>
                   )}
-                  <p className="font-medium text-gray-900 text-center">{option.text}</p>
+                  <p className="font-medium text-gray-900 text-center">
+                    {option.text}
+                  </p>
                 </div>
               ),
-            })
-          ))}
+            }),
+          )}
         </div>
 
         {showFeedback && renderFeedback({ isCorrect })}

@@ -1,0 +1,166 @@
+name: Backend CI
+
+'on':
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  # Database
+  DB_NAME: happy_little_learners
+  DB_USER: hll_user
+  DB_PASSWORD: secure_app_password
+  MYSQL_ROOT_PASSWORD: secure_root_password
+  # Application
+  SECRET_KEY: ${{ secrets.SECRET_KEY || 'your-super-secret-key-change-in-production-min-32-chars' }}
+  APP_ENV: development
+  DEBUG: 'true'
+  FRONTEND_URL: http://localhost:5173
+  BACKEND_URL: http://localhost:8000
+  CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
+
+jobs:
+  lint:
+    name: Ruff Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Ruff lint
+        working-directory: ./backend
+        run: |
+          ruff check . --select E,F,W,I,B,C4,UP --ignore E501,B008,I001,W291,W292,W293,UP031,UP035,F401,F811,F841,E402,UP007,UP017,UP035
+
+  format:
+    name: Black Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Black format check
+        working-directory: ./backend
+        run: black --check .
+
+  typecheck:
+    name: MyPy Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run MyPy type check
+        working-directory: ./backend
+        run: |
+          mypy --exclude "app/services/fix_.*" --exclude "app/services/add_recommendation_result.py" --exclude "app/services/fix_responses.py" --exclude "migrations/*" --exclude "scripts/*" app
+
+  test:
+    name: Pytest with Coverage
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        ports:
+          - 3306:3306
+        env:
+          MYSQL_ROOT_PASSWORD: ${{ env.MYSQL_ROOT_PASSWORD }}
+          MYSQL_DATABASE: ${{ env.DB_NAME }}
+          MYSQL_USER: ${{ env.DB_USER }}
+          MYSQL_PASSWORD: ${{ env.DB_PASSWORD }}
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Pytest with Coverage
+        working-directory: ./backend
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+        run: |
+          python -m pytest app/tests/ -v --cov=app --cov-report=term-missing --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./backend/coverage.xml
+          flags: backend
+          fail_ci_if_error: false
+
+  # Summary job to ensure all checks pass
+  summary:
+    name: Backend CI Summary
+    needs: [lint, format, typecheck, test]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [[ "${{ needs.lint.result }}" != "success" ]]; then echo "Lint failed"; exit 1; fi
+          if [[ "${{ needs.format.result }}" != "success" ]]; then echo "Format check failed"; exit 1; fi
+          if [[ "${{ needs.typecheck.result }}" != "success" ]]; then echo "Type check failed"; exit 1; fi
+          if [[ "${{ needs.test.result }}" != "success" ]]; then echo "Tests failed"; exit 1; fi
+          echo "All backend CI checks passed!"

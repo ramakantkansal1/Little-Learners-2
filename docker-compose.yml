@@ -21,6 +21,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # E2E MySQL - separate instance for E2E tests with dedicated database
+  mysql-e2e:
+    image: mysql:8.0
+    container_name: hll-mysql-e2e
+    platform: linux/arm64
+    environment:
+      MYSQL_ROOT_PASSWORD: ${E2E_MYSQL_ROOT_PASSWORD:-e2e_root_password_123}
+      MYSQL_DATABASE: ${E2E_DB_NAME:-happy_little_learners_e2e}
+      MYSQL_USER: ${DB_USER:-hll_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-secure_app_password}
+    ports:
+      - "3308:3306"
+    volumes:
+      - mysql_e2e_data:/var/lib/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7-alpine
     container_name: hll-redis
@@ -65,11 +86,44 @@ services:
         condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
+  # E2E Backend - uses dedicated E2E MySQL instance
+  backend-e2e:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hll-backend-e2e
+    environment:
+      - APP_ENV=e2e
+      - DEBUG=true
+      - DB_HOST=mysql-e2e
+      - DB_PORT=3306
+      - DB_NAME=${E2E_DB_NAME:-happy_little_learners_e2e}
+      - DB_USER=${DB_USER:-hll_user}
+      - DB_PASSWORD=${DB_PASSWORD:-secure_app_password}
+      - MYSQL_ROOT_PASSWORD=${E2E_MYSQL_ROOT_PASSWORD:-e2e_root_password_123}
+      - SECRET_KEY=${SECRET_KEY:-your-super-secret-key-change-in-production-min-32-chars}
+      - FRONTEND_URL=http://localhost:5173
+      - BACKEND_URL=http://localhost:8001
+      - CORS_ORIGINS=["http://localhost:5173","http://127.0.0.1:5173"]
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
+    depends_on:
+      mysql-e2e:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: hll-frontend
+    environment:
+      - E2E_MODE=true
     ports:
       - "5173:5173"
     volumes:
@@ -90,4 +144,5 @@ services:
 
 volumes:
   mysql_data:
+  mysql_e2e_data:
   redis_data:

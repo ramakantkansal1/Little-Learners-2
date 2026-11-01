@@ -1,4 +1,4 @@
-import { ActivityTypeComponentProps } from '../ActivityRenderer';
+import { ActivityTypeComponentProps } from "../ActivityRenderer";
 import {
   renderActivityHeader,
   renderProgress,
@@ -9,16 +9,18 @@ import {
   renderCompletionScreen,
   renderLoading,
   renderError,
-} from './BaseActivityComponents';
+} from "./BaseActivityComponents";
 
 /**
  * Image Selection Activity Component.
  * Used for: image_selection, alphabet_recognition, number_recognition
- * 
+ *
  * Displays options as large clickable cards with images/emojis.
  * The prompt is typically a question like "Which one is A?" or "Find the apple"
  */
-export function ImageSelectionActivity(props: ActivityTypeComponentProps): React.ReactElement {
+export function ImageSelectionActivity(
+  props: ActivityTypeComponentProps,
+): React.ReactElement {
   const {
     activity,
     currentQuestion,
@@ -37,20 +39,24 @@ export function ImageSelectionActivity(props: ActivityTypeComponentProps): React
     audioEnabled,
     attemptId: _attemptId,
     loading,
-      recommendation,
-      recommendationLoading,
-      recommendationError,
-      startingRecommended,
-      onStartRecommended,
+    recommendation,
+    recommendationLoading,
+    recommendationError,
+    startingRecommended,
+    onStartRecommended,
     submitting,
     error,
   } = props;
 
   if (loading) return renderLoading();
-  if (error || !activity) return renderError({ error: error || 'Activity not found', onRetry });
+  if (error || !activity)
+    return renderError({ error: error || "Activity not found", onRetry });
 
   if (completed) {
-    const percentage = activity.questions.length > 0 ? Math.round((score / activity.questions.length) * 100) : 0;
+    const percentage =
+      activity.questions.length > 0
+        ? Math.round((score / activity.questions.length) * 100)
+        : 0;
     const earnedStar = percentage >= 80;
     return renderCompletionScreen({
       activity,
@@ -70,7 +76,8 @@ export function ImageSelectionActivity(props: ActivityTypeComponentProps): React
   }
 
   const question = activity.questions[currentQuestion];
-  const questionTypeLabel = activity.questions[0]?.question_type.replace('_', ' ') || 'Activity';
+  const questionTypeLabel =
+    activity.questions[0]?.question_type.replace("_", " ") || "Activity";
 
   return (
     <div className="space-y-6">
@@ -85,13 +92,13 @@ export function ImageSelectionActivity(props: ActivityTypeComponentProps): React
       {renderProgress({ currentQuestion, totalQuestions, score })}
 
       <div className="card p-6">
-        {renderQuestionPrompt({ 
+        {renderQuestionPrompt({
           prompt: question.prompt,
           promptEmoji: question.configuration?.promptEmoji as string,
         })}
 
         <div className="grid grid-cols-2 gap-4">
-          {question.options.map((option) => (
+          {question.options.map((option) =>
             renderOptionButton({
               option,
               isSelected: selectedAnswer === option.id,
@@ -103,19 +110,21 @@ export function ImageSelectionActivity(props: ActivityTypeComponentProps): React
               renderOptionContent: () => (
                 <div className="flex flex-col items-center gap-2">
                   {option.image_url ? (
-                    <img 
-                      src={option.image_url} 
+                    <img
+                      src={option.image_url}
                       alt={option.text}
                       className="w-24 h-24 object-contain rounded-lg bg-gray-50"
                     />
                   ) : (
                     <span className="text-5xl">{option.text}</span>
                   )}
-                  <p className="font-medium text-gray-900 text-center">{option.text}</p>
+                  <p className="font-medium text-gray-900 text-center">
+                    {option.text}
+                  </p>
                 </div>
               ),
-            })
-          ))}
+            }),
+          )}
         </div>
 
         {showFeedback && renderFeedback({ isCorrect })}

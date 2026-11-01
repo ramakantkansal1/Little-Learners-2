@@ -1,4 +1,4 @@
-import { ActivityTypeComponentProps } from '../ActivityRenderer';
+import { ActivityTypeComponentProps } from "../ActivityRenderer";
 import {
   renderActivityHeader,
   renderProgress,
@@ -9,16 +9,18 @@ import {
   renderCompletionScreen,
   renderLoading,
   renderError,
-} from './BaseActivityComponents';
+} from "./BaseActivityComponents";
 
 /**
  * Picture Comprehension Activity Component.
  * Used for: picture_comprehension
- * 
+ *
  * Shows an image and asks questions about it.
  * Similar to simple_quiz but with a reference image.
  */
-export function PictureComprehensionActivity(props: ActivityTypeComponentProps): React.ReactElement {
+export function PictureComprehensionActivity(
+  props: ActivityTypeComponentProps,
+): React.ReactElement {
   const {
     activity,
     currentQuestion,
@@ -37,20 +39,24 @@ export function PictureComprehensionActivity(props: ActivityTypeComponentProps):
     audioEnabled,
     attemptId: _attemptId,
     loading,
-      recommendation,
-      recommendationLoading,
-      recommendationError,
-      startingRecommended,
-      onStartRecommended,
+    recommendation,
+    recommendationLoading,
+    recommendationError,
+    startingRecommended,
+    onStartRecommended,
     submitting,
     error,
   } = props;
 
   if (loading) return renderLoading();
-  if (error || !activity) return renderError({ error: error || 'Activity not found', onRetry });
+  if (error || !activity)
+    return renderError({ error: error || "Activity not found", onRetry });
 
   if (completed) {
-    const percentage = activity.questions.length > 0 ? Math.round((score / activity.questions.length) * 100) : 0;
+    const percentage =
+      activity.questions.length > 0
+        ? Math.round((score / activity.questions.length) * 100)
+        : 0;
     const earnedStar = percentage >= 80;
     return renderCompletionScreen({
       activity,
@@ -70,11 +76,15 @@ export function PictureComprehensionActivity(props: ActivityTypeComponentProps):
   }
 
   const question = activity.questions[currentQuestion];
-  const questionTypeLabel = activity.questions[0]?.question_type.replace('_', ' ') || 'Picture Comprehension';
+  const questionTypeLabel =
+    activity.questions[0]?.question_type.replace("_", " ") ||
+    "Picture Comprehension";
 
   // Get reference image from configuration
-  const referenceImage = question.configuration?.referenceImage as string | undefined;
-  const referenceImageAlt = question.configuration?.referenceImageAlt as string | undefined;
+  const referenceImage = question.configuration?.referenceImage as
+    string | undefined;
+  const referenceImageAlt = question.configuration?.referenceImageAlt as
+    string | undefined;
 
   return (
     <div className="space-y-6">
@@ -98,19 +108,19 @@ export function PictureComprehensionActivity(props: ActivityTypeComponentProps):
             <div className="flex justify-center">
               <img
                 src={referenceImage}
-                alt={referenceImageAlt || 'Reference image'}
+                alt={referenceImageAlt || "Reference image"}
                 className="max-w-full h-48 object-contain rounded-xl border border-gray-200 bg-gray-50"
               />
             </div>
           </div>
         )}
 
-        {renderQuestionPrompt({ 
+        {renderQuestionPrompt({
           prompt: question.prompt,
         })}
 
         <div className="grid grid-cols-1 gap-3">
-          {question.options.map((option) => (
+          {question.options.map((option) =>
             renderOptionButton({
               option,
               isSelected: selectedAnswer === option.id,
@@ -122,8 +132,8 @@ export function PictureComprehensionActivity(props: ActivityTypeComponentProps):
               renderOptionContent: () => (
                 <div className="flex items-center gap-4">
                   {option.image_url ? (
-                    <img 
-                      src={option.image_url} 
+                    <img
+                      src={option.image_url}
                       alt={option.text}
                       className="w-12 h-12 object-contain rounded-lg bg-gray-50"
                     />
@@ -135,8 +145,8 @@ export function PictureComprehensionActivity(props: ActivityTypeComponentProps):
                   </div>
                 </div>
               ),
-            })
-          ))}
+            }),
+          )}
         </div>
 
         {showFeedback && renderFeedback({ isCorrect })}

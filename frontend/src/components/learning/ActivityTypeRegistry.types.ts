@@ -1,5 +1,5 @@
-import { ActivityType } from '@/types';
-import type { ReactNode } from 'react';
+import { ActivityType } from "@/types";
+import type { ReactNode } from "react";
 
 /**
  * Registry entry for an activity type.
@@ -27,7 +27,9 @@ export interface ActivityTypeRegistryEntry {
  * Type for activity type component.
  * Each activity type component receives the same props interface.
  */
-export type ActivityTypeComponent = (props: ActivityTypeComponentProps) => ReactNode;
+export type ActivityTypeComponent = (
+  props: ActivityTypeComponentProps,
+) => ReactNode;
 
 /**
  * Props passed to all activity type components.

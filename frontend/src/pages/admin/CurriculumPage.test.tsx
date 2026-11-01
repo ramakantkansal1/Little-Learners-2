@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
-import CurriculumPage from './CurriculumPage';
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { BrowserRouter } from "react-router-dom";
+import CurriculumPage from "./CurriculumPage";
 
 // Mock the API service with default resolved values
-vi.mock('@services/api', () => {
+vi.mock("@services/api", () => {
   const m: any = {
     adminApi: {
       getStages: vi.fn(),
@@ -34,7 +34,13 @@ vi.mock('@services/api', () => {
       getTopics: vi.fn(),
     },
   };
-  const empty: any = { data: [], status: 200, statusText: 'OK', headers: {}, config: {} };
+  const empty: any = {
+    data: [],
+    status: 200,
+    statusText: "OK",
+    headers: {},
+    config: {},
+  };
   m.adminApi.getStages.mockResolvedValue(empty);
   m.adminApi.getSubjects.mockResolvedValue(empty);
   m.adminApi.getLessons.mockResolvedValue(empty);
@@ -44,25 +50,22 @@ vi.mock('@services/api', () => {
   return m;
 });
 
-import {
-  adminApi,
-  curriculumApi,
-} from '@services/api';
+import { adminApi, curriculumApi } from "@services/api";
 
 const renderPage = () =>
   render(
     <BrowserRouter>
       <CurriculumPage />
-    </BrowserRouter>
+    </BrowserRouter>,
   );
 
 async function clickTab(label: string) {
   await waitFor(() => {
     expect(
-      screen.getAllByRole('button').some((b) => b.textContent?.includes(label))
+      screen.getAllByRole("button").some((b) => b.textContent?.includes(label)),
     ).toBe(true);
   });
-  const tabs = screen.getAllByRole('button');
+  const tabs = screen.getAllByRole("button");
   const tab = tabs.find((t) => t.textContent?.includes(label));
   expect(tab).toBeDefined();
   fireEvent.click(tab!);
@@ -71,12 +74,12 @@ async function clickTab(label: string) {
 async function openAddModal() {
   await waitFor(() => {
     expect(
-      screen.getAllByRole('button').some((b) =>
-        b.textContent?.includes('Add Content')
-      )
+      screen
+        .getAllByRole("button")
+        .some((b) => b.textContent?.includes("Add Content")),
     ).toBe(true);
   });
-  const addButtons = screen.getAllByRole('button', { name: /Add Content/i });
+  const addButtons = screen.getAllByRole("button", { name: /Add Content/i });
   fireEvent.click(addButtons[0]);
   await waitFor(() => {
     expect(screen.getByText(/Add New Content/)).toBeInTheDocument();
@@ -85,14 +88,20 @@ async function openAddModal() {
 
 async function submitForm() {
   await waitFor(() => {
-    expect(document.querySelector('form')).not.toBeNull();
+    expect(document.querySelector("form")).not.toBeNull();
   });
-  const form = document.querySelector('form')!;
+  const form = document.querySelector("form")!;
   fireEvent.submit(form);
 }
 
 function resetApiMocks() {
-  const empty: any = { data: [], status: 200, statusText: 'OK', headers: {}, config: {} };
+  const empty: any = {
+    data: [],
+    status: 200,
+    statusText: "OK",
+    headers: {},
+    config: {},
+  };
   vi.mocked(adminApi.getStages).mockResolvedValue(empty);
   vi.mocked(adminApi.getSubjects).mockResolvedValue(empty);
   vi.mocked(adminApi.getLessons).mockResolvedValue(empty);
@@ -119,66 +128,66 @@ function resetApiMocks() {
   vi.mocked(adminApi.updateActivityDifficultyTier).mockResolvedValue(empty);
 }
 
-describe('CurriculumPage — Form Validation', () => {
+describe("CurriculumPage — Form Validation", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     resetApiMocks();
   });
 
-  it('shows validation error when creating a lesson without required fields', async () => {
+  it("shows validation error when creating a lesson without required fields", async () => {
     renderPage();
 
-    await clickTab('Lessons');
+    await clickTab("Lessons");
 
     await openAddModal();
 
     await submitForm();
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(screen.getByRole("alert")).toBeInTheDocument();
     });
   });
 
-  it('shows validation error when creating an activity without required fields', async () => {
+  it("shows validation error when creating an activity without required fields", async () => {
     renderPage();
 
-    await clickTab('Activities');
+    await clickTab("Activities");
 
     await openAddModal();
 
     await submitForm();
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(screen.getByRole("alert")).toBeInTheDocument();
     });
   });
 
-  it('shows validation error for invalid activity configuration', async () => {
+  it("shows validation error for invalid activity configuration", async () => {
     renderPage();
 
-    await clickTab('Activities');
+    await clickTab("Activities");
 
     await openAddModal();
 
-    const typeSelect = document.querySelectorAll('select')[1];
+    const typeSelect = document.querySelectorAll("select")[1];
     expect(typeSelect).toBeDefined();
-    fireEvent.change(typeSelect!, { target: { value: 'counting' } });
+    fireEvent.change(typeSelect!, { target: { value: "counting" } });
 
     await submitForm();
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(screen.getByRole("alert")).toBeInTheDocument();
     });
   });
 });
 
-describe('CurriculumPage — Modal Open/Close', () => {
+describe("CurriculumPage — Modal Open/Close", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     resetApiMocks();
   });
 
-  it('opens the Add Content modal when clicking Add Content button', async () => {
+  it("opens the Add Content modal when clicking Add Content button", async () => {
     renderPage();
 
     expect(screen.queryByText(/Add New Content/)).not.toBeInTheDocument();
@@ -186,14 +195,14 @@ describe('CurriculumPage — Modal Open/Close', () => {
     await openAddModal();
   });
 
-  it('closes the Add Content modal when clicking the X button', async () => {
+  it("closes the Add Content modal when clicking the X button", async () => {
     renderPage();
 
     await openAddModal();
 
-    const buttons = screen.getAllByRole('button');
+    const buttons = screen.getAllByRole("button");
     const closeButton = buttons.find(
-      (b) => !b.textContent?.trim() && b.querySelector('svg')
+      (b) => !b.textContent?.trim() && b.querySelector("svg"),
     );
     expect(closeButton).toBeDefined();
 
@@ -203,14 +212,14 @@ describe('CurriculumPage — Modal Open/Close', () => {
   });
 });
 
-describe('CurriculumPage — API Error Handling', () => {
+describe("CurriculumPage — API Error Handling", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     resetApiMocks();
   });
 
-  it('displays error message when lesson creation API fails', async () => {
-    const errorMsg = 'Server error: unable to create lesson';
+  it("displays error message when lesson creation API fails", async () => {
+    const errorMsg = "Server error: unable to create lesson";
     vi.mocked(adminApi.createLesson).mockRejectedValue({
       response: {
         data: { error: { message: errorMsg } },
@@ -219,25 +228,27 @@ describe('CurriculumPage — API Error Handling', () => {
 
     renderPage();
 
-    await clickTab('Lessons');
+    await clickTab("Lessons");
 
     await openAddModal();
 
     // Fill required fields so validation passes, then API error should surface
-    const topicSelect = document.querySelectorAll('select')[0];
-    fireEvent.change(topicSelect!, { target: { value: '1' } });
-    const codeInput = document.querySelector('input[placeholder="e.g., lesson_1"]');
-    fireEvent.change(codeInput!, { target: { value: 'LESSON-001' } });
+    const topicSelect = document.querySelectorAll("select")[0];
+    fireEvent.change(topicSelect!, { target: { value: "1" } });
+    const codeInput = document.querySelector(
+      'input[placeholder="e.g., lesson_1"]',
+    );
+    fireEvent.change(codeInput!, { target: { value: "LESSON-001" } });
 
     await submitForm();
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(screen.getByRole("alert")).toBeInTheDocument();
     });
   });
 
-  it('displays error message when stage creation API fails', async () => {
-    const errorMsg = 'Stage code already exists';
+  it("displays error message when stage creation API fails", async () => {
+    const errorMsg = "Stage code already exists";
     vi.mocked(adminApi.createStage).mockRejectedValue({
       response: {
         data: { error: { message: errorMsg } },
@@ -246,30 +257,34 @@ describe('CurriculumPage — API Error Handling', () => {
 
     renderPage();
 
-    await clickTab('Stages');
+    await clickTab("Stages");
 
     await openAddModal();
 
-    const codeInput = document.querySelector('input[placeholder="e.g., playgroup"]');
-    fireEvent.change(codeInput!, { target: { value: 'dup-stage' } });
-    const nameInput = document.querySelector('input[placeholder="e.g., Playgroup / Pre-Nursery"]');
-    fireEvent.change(nameInput!, { target: { value: 'Duplicate Stage' } });
+    const codeInput = document.querySelector(
+      'input[placeholder="e.g., playgroup"]',
+    );
+    fireEvent.change(codeInput!, { target: { value: "dup-stage" } });
+    const nameInput = document.querySelector(
+      'input[placeholder="e.g., Playgroup / Pre-Nursery"]',
+    );
+    fireEvent.change(nameInput!, { target: { value: "Duplicate Stage" } });
 
     await submitForm();
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(screen.getByRole("alert")).toBeInTheDocument();
     });
   });
 
-  it('handles publish validation errors from API', async () => {
+  it("handles publish validation errors from API", async () => {
     const draftLesson: any = {
       id: 1,
-      code: 'draft-001',
-      title: 'Draft Lesson',
-      subject_name: 'Test Subject',
-      stage_code: 'playgroup',
-      status: 'draft',
+      code: "draft-001",
+      title: "Draft Lesson",
+      subject_name: "Test Subject",
+      stage_code: "playgroup",
+      status: "draft",
       estimated_duration_minutes: 10,
       display_order: 0,
       published_at: null,
@@ -277,13 +292,17 @@ describe('CurriculumPage — API Error Handling', () => {
     };
 
     const validationErrors: any[] = [
-      { field: 'activities', message: 'Lesson must have at least one activity', code: 'VALIDATION_ERROR' },
+      {
+        field: "activities",
+        message: "Lesson must have at least one activity",
+        code: "VALIDATION_ERROR",
+      },
     ];
 
     vi.mocked(adminApi.getLessons).mockResolvedValue({
       data: [draftLesson],
       status: 200,
-      statusText: 'OK',
+      statusText: "OK",
       headers: {},
       config: {},
     } as any);
@@ -291,17 +310,17 @@ describe('CurriculumPage — API Error Handling', () => {
     vi.mocked(adminApi.publishLesson).mockResolvedValue({
       data: { valid: false, errors: validationErrors, warnings: [] },
       status: 200,
-      statusText: 'OK',
+      statusText: "OK",
       headers: {},
       config: {},
     } as any);
 
     renderPage();
 
-    await clickTab('Lessons');
+    await clickTab("Lessons");
 
     await waitFor(() => {
-      expect(screen.getByText('Draft Lesson')).toBeInTheDocument();
+      expect(screen.getByText("Draft Lesson")).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByTitle(/Validate and publish/i));

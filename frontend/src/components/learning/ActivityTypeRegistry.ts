@@ -1,8 +1,8 @@
-import { ActivityType } from '@/types';
+import { ActivityType } from "@/types";
 import {
   ActivityTypeComponent,
   ActivityTypeRegistryEntry,
-} from './ActivityTypeRegistry.types';
+} from "./ActivityTypeRegistry.types";
 
 /**
  * Registry for activity type components.
@@ -50,7 +50,9 @@ export const activityTypeRegistry = new ActivityTypeRegistry();
 /**
  * Get registry entry for an activity type.
  */
-export function getRegistryEntry(type: ActivityType): ActivityTypeRegistryEntry | undefined {
+export function getRegistryEntry(
+  type: ActivityType,
+): ActivityTypeRegistryEntry | undefined {
   return activityTypeRegistry.get(type);
 }
 
@@ -67,7 +69,7 @@ export function createActivityTypeEntry(
     supportsAudio?: boolean;
     supportsImages?: boolean;
     defaultConfig?: Record<string, unknown>;
-  } = {}
+  } = {},
 ): ActivityTypeRegistryEntry {
   return {
     type,
@@ -86,7 +88,7 @@ export function createActivityTypeEntry(
  */
 export function validateActivityConfig(
   type: ActivityType,
-  config: Record<string, unknown> | null
+  config: Record<string, unknown> | null,
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
@@ -96,19 +98,23 @@ export function validateActivityConfig(
 
   // Type-specific validation can be added here
   switch (type) {
-    case 'counting':
-      if (typeof config.maxCount !== 'number' || config.maxCount < 1) {
-        errors.push('counting activity requires maxCount number >= 1');
+    case "counting":
+      if (typeof config.maxCount !== "number" || config.maxCount < 1) {
+        errors.push("counting activity requires maxCount number >= 1");
       }
       break;
-    case 'sequencing':
+    case "sequencing":
       if (!Array.isArray(config.sequence) || config.sequence.length < 2) {
-        errors.push('sequencing activity requires sequence array with at least 2 items');
+        errors.push(
+          "sequencing activity requires sequence array with at least 2 items",
+        );
       }
       break;
-    case 'sorting':
+    case "sorting":
       if (!Array.isArray(config.categories) || config.categories.length < 2) {
-        errors.push('sorting activity requires categories array with at least 2 items');
+        errors.push(
+          "sorting activity requires categories array with at least 2 items",
+        );
       }
       break;
   }
@@ -135,5 +141,5 @@ export function registerActivityTypes(): void {
  */
 export async function ensureActivityTypesRegistered(): Promise<void> {
   if (activityTypeRegistry.getAllEntries().length > 0) return;
-  await import('./ActivityRenderer');
+  await import("./ActivityRenderer");
 }

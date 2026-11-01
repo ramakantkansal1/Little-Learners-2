@@ -1,9 +1,17 @@
-import { Link, useParams, useLocation, useNavigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { studentApi, type AnswerSubmitResponse, type NextActivityRecommendation, type AttemptCompleteResponse } from '@services/api';
-import { ActivityRenderer, type ActivityTypeComponentProps } from '@/components/learning/ActivityRenderer';
-import type { ActivityType } from '@/types';
+import { Link, useParams, useLocation, useNavigate } from "react-router-dom";
+import { Loader2 } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  studentApi,
+  type AnswerSubmitResponse,
+  type NextActivityRecommendation,
+  type AttemptCompleteResponse,
+} from "@services/api";
+import {
+  ActivityRenderer,
+  type ActivityTypeComponentProps,
+} from "@/components/learning/ActivityRenderer";
+import type { ActivityType } from "@/types";
 
 interface ActivityQuestion {
   id: number;
@@ -60,14 +68,17 @@ export default function ActivityPage() {
   } | null>(null);
 
   // Recommendation state
-  const [recommendation, setRecommendation] = useState<NextActivityRecommendation | null>(null);
+  const [recommendation, setRecommendation] =
+    useState<NextActivityRecommendation | null>(null);
   const [recommendationLoading, setRecommendationLoading] = useState(false);
-  const [recommendationError, setRecommendationError] = useState<string | null>(null);
+  const [recommendationError, setRecommendationError] = useState<string | null>(
+    null,
+  );
   const [startingRecommended, setStartingRecommended] = useState(false);
 
   // Parse search params from location.search directly to ensure reactivity
   const searchParams = new URLSearchParams(location.search);
-  const attemptIdParam = searchParams.get('attempt');
+  const attemptIdParam = searchParams.get("attempt");
 
   // Debug: render counter
   const renderCount = useRef(0);
@@ -89,16 +100,32 @@ export default function ActivityPage() {
         activityResponse = await studentApi.getActivityAttempt(attemptIdToUse);
       } else {
         // No attempt ID provided, create new one
-        const response = await studentApi.startActivityAttempt(parseInt(activityId!, 10));
+        const response = await studentApi.startActivityAttempt(
+          parseInt(activityId!, 10),
+        );
         attemptIdToUse = response.data.attempt_id;
-        navigate(`/student/activity/${activityId}?attempt=${response.data.attempt_id}`, { replace: true });
+        navigate(
+          `/student/activity/${activityId}?attempt=${response.data.attempt_id}`,
+          { replace: true },
+        );
         activityResponse = response;
       }
 
       setAttemptId(attemptIdToUse);
 
       const activityData = activityResponse.data.activity;
-      const responseData = activityResponse.data as { saved_progress?: { current_question_index?: number; selected_answer_id?: number; accumulated_score?: number }; lesson_progress?: { completion_percentage?: number; status?: string; last_activity_at?: string | null } };
+      const responseData = activityResponse.data as {
+        saved_progress?: {
+          current_question_index?: number;
+          selected_answer_id?: number;
+          accumulated_score?: number;
+        };
+        lesson_progress?: {
+          completion_percentage?: number;
+          status?: string;
+          last_activity_at?: string | null;
+        };
+      };
       const savedProgress = responseData.saved_progress;
       const lp = responseData.lesson_progress;
 
@@ -113,7 +140,7 @@ export default function ActivityPage() {
       if (lp) {
         setLessonProgress({
           completion_percentage: lp.completion_percentage ?? 0,
-          status: lp.status ?? 'not_started',
+          status: lp.status ?? "not_started",
           last_activity_at: lp.last_activity_at ?? null,
         });
       }
@@ -126,7 +153,7 @@ export default function ActivityPage() {
         instructions: activityData.instructions,
         estimated_duration_minutes: activityData.estimated_duration_minutes,
         configuration: activityData.configuration,
-        questions: activityData.questions.map(q => ({
+        questions: activityData.questions.map((q) => ({
           id: q.id,
           question_type: q.question_type,
           prompt: q.prompt,
@@ -134,7 +161,7 @@ export default function ActivityPage() {
           display_order: q.display_order,
           points: q.points,
           configuration: q.configuration,
-          options: q.options.map(o => ({
+          options: q.options.map((o) => ({
             id: o.id,
             text: o.text,
             text_audio_url: o.text_audio_url,
@@ -144,8 +171,8 @@ export default function ActivityPage() {
         })),
       });
     } catch (err) {
-      console.error('Failed to load activity:', err);
-      setError('Failed to load activity. Please try again.');
+      console.error("Failed to load activity:", err);
+      setError("Failed to load activity. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -164,24 +191,27 @@ export default function ActivityPage() {
 
     try {
       const question = activity.questions[currentQuestion];
-      const response = await studentApi.submitAnswer(attemptId, question.id, [answerId]);
+      const response = await studentApi.submitAnswer(attemptId, question.id, [
+        answerId,
+      ]);
       const answerResult: AnswerSubmitResponse = response.data;
 
       setIsCorrect(answerResult.is_correct);
-      if (answerResult.is_correct) setScore(prev => prev + 1);
+      if (answerResult.is_correct) setScore((prev) => prev + 1);
       setCorrectOptionIds(answerResult.correct_options);
       setShowFeedback(true);
 
       // Update lesson progress from backend response
       if (answerResult.lesson_progress) {
         setLessonProgress({
-          completion_percentage: answerResult.lesson_progress.completion_percentage,
+          completion_percentage:
+            answerResult.lesson_progress.completion_percentage,
           status: answerResult.lesson_progress.status,
           last_activity_at: answerResult.lesson_progress.last_activity_at,
         });
       }
     } catch (err) {
-      console.error('Failed to submit answer:', err);
+      console.error("Failed to submit answer:", err);
       setShowFeedback(false);
       setSelectedAnswer(null);
     } finally {
@@ -192,7 +222,7 @@ export default function ActivityPage() {
   const handleNext = async () => {
     if (!activity || !attemptId) return;
     if (currentQuestion < activity.questions.length - 1) {
-      setCurrentQuestion(prev => prev + 1);
+      setCurrentQuestion((prev) => prev + 1);
       setSelectedAnswer(null);
       setShowFeedback(false);
       setIsCorrect(false);
@@ -220,9 +250,9 @@ export default function ActivityPage() {
         const recResponse = await studentApi.getNextActivity();
         setRecommendation(recResponse.data);
       } catch (recErr) {
-        console.error('Failed to fetch recommendation:', recErr);
+        console.error("Failed to fetch recommendation:", recErr);
         // Don't block completion on recommendation failure
-        setRecommendationError('Could not load next activity recommendation');
+        setRecommendationError("Could not load next activity recommendation");
         setRecommendation(null);
       } finally {
         setRecommendationLoading(false);
@@ -235,8 +265,8 @@ export default function ActivityPage() {
 
       setCompleted(true);
     } catch (err) {
-      console.error('Failed to complete attempt:', err);
-      setRecommendationError('Failed to complete activity. Please try again.');
+      console.error("Failed to complete attempt:", err);
+      setRecommendationError("Failed to complete activity. Please try again.");
       // Still allow viewing completion screen locally
       setCompleted(true);
     } finally {
@@ -256,14 +286,21 @@ export default function ActivityPage() {
 
     try {
       // Start a new attempt for the recommended activity
-      const response = await studentApi.startActivityAttempt(recommendation.activity_id);
+      const response = await studentApi.startActivityAttempt(
+        recommendation.activity_id,
+      );
       const newAttemptId = response.data.attempt_id;
 
       // Navigate to the new activity with the new attempt ID
-      navigate(`/student/activity/${recommendation.activity_id}?attempt=${newAttemptId}`, { replace: true });
+      navigate(
+        `/student/activity/${recommendation.activity_id}?attempt=${newAttemptId}`,
+        { replace: true },
+      );
     } catch (err) {
-      console.error('Failed to start recommended activity:', err);
-      setRecommendationError('Failed to start the recommended activity. Please try again.');
+      console.error("Failed to start recommended activity:", err);
+      setRecommendationError(
+        "Failed to start the recommended activity. Please try again.",
+      );
     } finally {
       setStartingRecommended(false);
       startingRecommendedRef.current = false;
@@ -272,7 +309,7 @@ export default function ActivityPage() {
 
   const handlePrevious = () => {
     if (currentQuestion > 0) {
-      setCurrentQuestion(prev => prev - 1);
+      setCurrentQuestion((prev) => prev - 1);
       setSelectedAnswer(null);
       setShowFeedback(false);
       setIsCorrect(false);
@@ -286,9 +323,14 @@ export default function ActivityPage() {
     try {
       const response = await studentApi.startActivityAttempt(activity.id);
       setAttemptId(response.data.attempt_id);
-      navigate(`/student/activity/${activity.id}?attempt=${response.data.attempt_id}`, { replace: true });
+      navigate(
+        `/student/activity/${activity.id}?attempt=${response.data.attempt_id}`,
+        { replace: true },
+      );
 
-      const activityResponse = await studentApi.startActivityAttempt(activity.id);
+      const activityResponse = await studentApi.startActivityAttempt(
+        activity.id,
+      );
       const activityData = activityResponse.data.activity;
 
       setActivity({
@@ -299,7 +341,7 @@ export default function ActivityPage() {
         instructions: activityData.instructions,
         estimated_duration_minutes: activityData.estimated_duration_minutes,
         configuration: activityData.configuration,
-        questions: activityData.questions.map(q => ({
+        questions: activityData.questions.map((q) => ({
           id: q.id,
           question_type: q.question_type,
           prompt: q.prompt,
@@ -307,7 +349,7 @@ export default function ActivityPage() {
           display_order: q.display_order,
           points: q.points,
           configuration: q.configuration,
-          options: q.options.map(o => ({
+          options: q.options.map((o) => ({
             id: o.id,
             text: o.text,
             text_audio_url: o.text_audio_url,
@@ -325,8 +367,8 @@ export default function ActivityPage() {
       setScore(0);
       setCompleted(false);
     } catch (err) {
-      console.error('Failed to retry activity:', err);
-      alert('Failed to restart activity. Please try again.');
+      console.error("Failed to retry activity:", err);
+      alert("Failed to restart activity. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -350,12 +392,24 @@ export default function ActivityPage() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="w-16 h-16 rounded-2xl bg-red-100 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            <svg
+              className="w-8 h-8 text-red-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
             </svg>
           </div>
-          <h2 className="text-xl font-display font-bold text-gray-900 mb-2">Unable to load activity</h2>
-          <p className="text-gray-600 mb-6">{error || 'Activity not found'}</p>
+          <h2 className="text-xl font-display font-bold text-gray-900 mb-2">
+            Unable to load activity
+          </h2>
+          <p className="text-gray-600 mb-6">{error || "Activity not found"}</p>
           <Link to="/student/dashboard" className="btn btn-primary">
             Back to Dashboard
           </Link>
@@ -368,21 +422,27 @@ export default function ActivityPage() {
   const progressDisplay = lessonProgress ? (
     <div className="card p-4 mb-4">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-gray-700">Lesson Progress</span>
-        <span className="text-sm font-bold text-primary-600">{lessonProgress.completion_percentage}%</span>
+        <span className="text-sm font-medium text-gray-700">
+          Lesson Progress
+        </span>
+        <span className="text-sm font-bold text-primary-600">
+          {lessonProgress.completion_percentage}%
+        </span>
       </div>
       <div className="w-full bg-gray-200 rounded-full h-2.5">
         <div
           className="bg-primary-600 h-2.5 rounded-full"
-          style={{ width: `${Math.min(100, Math.max(0, lessonProgress.completion_percentage))}%` }}
+          style={{
+            width: `${Math.min(100, Math.max(0, lessonProgress.completion_percentage))}%`,
+          }}
         ></div>
       </div>
       <p className="text-xs text-gray-500 mt-2">
-        {lessonProgress.status === 'completed'
-          ? 'Lesson completed!'
-          : lessonProgress.status === 'in_progress'
-          ? 'In progress'
-          : 'Not started'}
+        {lessonProgress.status === "completed"
+          ? "Lesson completed!"
+          : lessonProgress.status === "in_progress"
+            ? "In progress"
+            : "Not started"}
       </p>
     </div>
   ) : null;
@@ -402,7 +462,7 @@ export default function ActivityPage() {
     onNext: handleNext,
     onPrevious: handlePrevious,
     onRetry: handleRetry,
-    onToggleAudio: () => setAudioEnabled(prev => !prev),
+    onToggleAudio: () => setAudioEnabled((prev) => !prev),
     audioEnabled,
     attemptId,
     loading,

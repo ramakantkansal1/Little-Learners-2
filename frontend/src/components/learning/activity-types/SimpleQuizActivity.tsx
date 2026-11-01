@@ -1,4 +1,4 @@
-import { ActivityTypeComponentProps } from '../ActivityRenderer';
+import { ActivityTypeComponentProps } from "../ActivityRenderer";
 import {
   renderActivityHeader,
   renderProgress,
@@ -9,16 +9,18 @@ import {
   renderCompletionScreen,
   renderLoading,
   renderError,
-} from './BaseActivityComponents';
+} from "./BaseActivityComponents";
 
 /**
  * Simple Quiz Activity Component.
  * Used for: simple_quiz, picture_comprehension
- * 
+ *
  * Standard multiple choice quiz with text-based options.
  * The prompt is a question, options are text answers.
  */
-export function SimpleQuizActivity(props: ActivityTypeComponentProps): React.ReactElement {
+export function SimpleQuizActivity(
+  props: ActivityTypeComponentProps,
+): React.ReactElement {
   const {
     activity,
     currentQuestion,
@@ -37,20 +39,24 @@ export function SimpleQuizActivity(props: ActivityTypeComponentProps): React.Rea
     audioEnabled,
     attemptId: _attemptId,
     loading,
-      recommendation,
-      recommendationLoading,
-      recommendationError,
-      startingRecommended,
-      onStartRecommended,
+    recommendation,
+    recommendationLoading,
+    recommendationError,
+    startingRecommended,
+    onStartRecommended,
     submitting,
     error,
   } = props;
 
   if (loading) return renderLoading();
-  if (error || !activity) return renderError({ error: error || 'Activity not found', onRetry });
+  if (error || !activity)
+    return renderError({ error: error || "Activity not found", onRetry });
 
   if (completed) {
-    const percentage = activity.questions.length > 0 ? Math.round((score / activity.questions.length) * 100) : 0;
+    const percentage =
+      activity.questions.length > 0
+        ? Math.round((score / activity.questions.length) * 100)
+        : 0;
     const earnedStar = percentage >= 80;
     return renderCompletionScreen({
       activity,
@@ -70,7 +76,8 @@ export function SimpleQuizActivity(props: ActivityTypeComponentProps): React.Rea
   }
 
   const question = activity.questions[currentQuestion];
-  const questionTypeLabel = activity.questions[0]?.question_type.replace('_', ' ') || 'Quiz';
+  const questionTypeLabel =
+    activity.questions[0]?.question_type.replace("_", " ") || "Quiz";
 
   return (
     <div className="space-y-6">
@@ -85,13 +92,13 @@ export function SimpleQuizActivity(props: ActivityTypeComponentProps): React.Rea
       {renderProgress({ currentQuestion, totalQuestions, score })}
 
       <div className="card p-6">
-        {renderQuestionPrompt({ 
+        {renderQuestionPrompt({
           prompt: question.prompt,
           promptEmoji: question.configuration?.promptEmoji as string,
         })}
 
         <div className="grid grid-cols-1 gap-3">
-          {question.options.map((option) => (
+          {question.options.map((option) =>
             renderOptionButton({
               option,
               isSelected: selectedAnswer === option.id,
@@ -103,8 +110,8 @@ export function SimpleQuizActivity(props: ActivityTypeComponentProps): React.Rea
               renderOptionContent: () => (
                 <div className="flex items-center gap-4">
                   {option.image_url ? (
-                    <img 
-                      src={option.image_url} 
+                    <img
+                      src={option.image_url}
                       alt={option.text}
                       className="w-12 h-12 object-contain rounded-lg bg-gray-50"
                     />
@@ -118,8 +125,8 @@ export function SimpleQuizActivity(props: ActivityTypeComponentProps): React.Rea
                   </div>
                 </div>
               ),
-            })
-          ))}
+            }),
+          )}
         </div>
 
         {showFeedback && renderFeedback({ isCorrect })}

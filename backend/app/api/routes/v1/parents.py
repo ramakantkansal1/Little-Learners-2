@@ -14,7 +14,7 @@ from app.core.database import get_db
 from app.core.exceptions import NotFoundException, ValidationException, ConflictException
 from app.models import (
     User, ParentProfile, StudentProfile, ParentStudentRelationship, UserPreference,
-    ConsentRecord,
+    ConsentRecord, Role, UserRole,
 )
 from app.permissions.dependencies import get_current_user, require_permission
 from app.permissions.roles import Permission
@@ -355,6 +355,12 @@ async def create_child(
         can_manage_settings=True,
     )
     db.add(relationship)
+
+    # Assign student role to the student user
+    student_role_result = await db.execute(select(Role).where(Role.name == "student"))
+    student_role = student_role_result.scalar_one_or_none()
+    if student_role:
+        db.add(UserRole(user_id=student_user.id, role_id=student_role.id))
 
     # Create consent records for the child
     from app.models import ConsentRecord

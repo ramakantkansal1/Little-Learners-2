@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test.describe('Student Login', () => {
   test.beforeEach(async ({ page }) => {
@@ -20,12 +20,10 @@ test.describe('Student Login', () => {
     });
   });
 
-  test('should login successfully and navigate to dashboard', async ({ page }) => {
-    // Fill in credentials
-    const username = process.env.E2E_STUDENT_USERNAME || 'aarav_1';
-    const pin = process.env.E2E_STUDENT_PIN || '1234';
-    await page.fill('input[name="username"]', username);
-    await page.fill('input[name="pin"]', pin);
+  test('should login successfully and navigate to dashboard', async ({ page, studentCredentials }) => {
+    // Fill in credentials from fixture
+    await page.fill('input[name="username"]', studentCredentials.studentUsername);
+    await page.fill('input[name="pin"]', studentCredentials.studentPin);
     
     // Click login button
     await page.click('button[type="submit"]');
@@ -36,11 +34,11 @@ test.describe('Student Login', () => {
     // Verify dashboard content loads (not showing loading spinner) - increased timeout for slow test env
     await expect(page.locator('text=Loading your learning space')).not.toBeVisible({ timeout: 60000 });
     // Check for profile name in sidebar (use first match)
-    await expect(page.locator('text=Aarav').first()).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(`text=${studentCredentials.studentUsername.split('_')[0]}`).first()).toBeVisible({ timeout: 10000 });
   });
 
-  test('should show error for invalid PIN', async ({ page }) => {
-    await page.fill('input[name="username"]', process.env.E2E_STUDENT_USERNAME || 'aarav_1');
+  test('should show error for invalid PIN', async ({ page, studentCredentials }) => {
+    await page.fill('input[name="username"]', studentCredentials.studentUsername);
     await page.fill('input[name="pin"]', '0000');
     await page.click('button[type="submit"]');
     

@@ -1,0 +1,125 @@
+name: Database CI
+
+'on':
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  # Database
+  DB_NAME: happy_little_learners
+  DB_USER: hll_user
+  DB_PASSWORD: secure_app_password
+  MYSQL_ROOT_PASSWORD: secure_root_password
+  # Application
+  SECRET_KEY: ${{ secrets.SECRET_KEY || 'your-super-secret-key-change-in-production-min-32-chars' }}
+  APP_ENV: development
+  DEBUG: 'true'
+  FRONTEND_URL: http://localhost:5173
+  BACKEND_URL: http://localhost:8000
+  CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
+
+jobs:
+  migration-validation:
+    name: Migration Validation
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        ports:
+          - 3306:3306
+        env:
+          MYSQL_ROOT_PASSWORD: ${{ env.MYSQL_ROOT_PASSWORD }}
+          MYSQL_DATABASE: ${{ env.DB_NAME }}
+          MYSQL_USER: ${{ env.DB_USER }}
+          MYSQL_PASSWORD: ${{ env.DB_PASSWORD }}
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Alembic migrations to head
+        working-directory: ./backend
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+        run: |
+          python -m alembic upgrade head
+
+      - name: Verify database schema
+        working-directory: ./backend
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+        run: python scripts/verify_schema.py
+
+      - name: Test migration downgrade and upgrade (reversibility)
+        working-directory: ./backend
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+        run: |
+          python -m alembic downgrade -1
+          python -m alembic upgrade head
+          echo "Migration downgrade/upgrade cycle successful"
+
+      - name: Verify schema after downgrade/upgrade cycle
+        working-directory: ./backend
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+        run: python scripts/verify_schema_after_cycle.py
+
+  # Migration graph validation
+  migration-graph-validation:
+    name: Migration Graph Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate migration graph (no multiple heads)
+        working-directory: ./backend
+        run: python scripts/validate_migration_graph.py
+
+  # Summary job
+  summary:
+    name: Database CI Summary
+    needs: [migration-validation, migration-graph-validation]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [[ "${{ needs.migration-validation.result }}" != "success" ]]; then echo "Migration validation failed"; exit 1; fi
+          if [[ "${{ needs.migration-graph-validation.result }}" != "success" ]]; then echo "Migration graph validation failed"; exit 1; fi
+          echo "All database CI checks passed!"

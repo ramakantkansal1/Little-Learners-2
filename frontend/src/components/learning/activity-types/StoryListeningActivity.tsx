@@ -1,4 +1,4 @@
-import { ActivityTypeComponentProps } from '../ActivityRenderer';
+import { ActivityTypeComponentProps } from "../ActivityRenderer";
 import {
   renderActivityHeader,
   renderProgress,
@@ -9,15 +9,17 @@ import {
   renderCompletionScreen,
   renderLoading,
   renderError,
-} from './BaseActivityComponents';
+} from "./BaseActivityComponents";
 
 /**
  * Story Listening Activity Component.
  * Used for: story_listening
- * 
+ *
  * Plays a story audio and asks comprehension questions.
  */
-export function StoryListeningActivity(props: ActivityTypeComponentProps): React.ReactElement {
+export function StoryListeningActivity(
+  props: ActivityTypeComponentProps,
+): React.ReactElement {
   const {
     activity,
     currentQuestion,
@@ -36,20 +38,24 @@ export function StoryListeningActivity(props: ActivityTypeComponentProps): React
     audioEnabled,
     attemptId: _attemptId,
     loading,
-      recommendation,
-      recommendationLoading,
-      recommendationError,
-      startingRecommended,
-      onStartRecommended,
+    recommendation,
+    recommendationLoading,
+    recommendationError,
+    startingRecommended,
+    onStartRecommended,
     submitting,
     error,
   } = props;
 
   if (loading) return renderLoading();
-  if (error || !activity) return renderError({ error: error || 'Activity not found', onRetry });
+  if (error || !activity)
+    return renderError({ error: error || "Activity not found", onRetry });
 
   if (completed) {
-    const percentage = activity.questions.length > 0 ? Math.round((score / activity.questions.length) * 100) : 0;
+    const percentage =
+      activity.questions.length > 0
+        ? Math.round((score / activity.questions.length) * 100)
+        : 0;
     const earnedStar = percentage >= 80;
     return renderCompletionScreen({
       activity,
@@ -69,7 +75,8 @@ export function StoryListeningActivity(props: ActivityTypeComponentProps): React
   }
 
   const question = activity.questions[currentQuestion];
-  const questionTypeLabel = activity.questions[0]?.question_type.replace('_', ' ') || 'Story Listening';
+  const questionTypeLabel =
+    activity.questions[0]?.question_type.replace("_", " ") || "Story Listening";
 
   // Get story configuration
   const storyTitle = question.configuration?.storyTitle as string | undefined;
@@ -80,7 +87,7 @@ export function StoryListeningActivity(props: ActivityTypeComponentProps): React
   const handlePlayAudio = (url: string | null) => {
     if (url) {
       const audio = new Audio(url);
-      audio.play().catch(() => console.warn('Audio playback failed'));
+      audio.play().catch(() => console.warn("Audio playback failed"));
     }
   };
 
@@ -103,11 +110,17 @@ export function StoryListeningActivity(props: ActivityTypeComponentProps): React
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
                 {storyImage && (
-                  <img src={storyImage} alt={storyTitle || 'Story'} className="w-16 h-16 rounded-lg object-cover" />
+                  <img
+                    src={storyImage}
+                    alt={storyTitle || "Story"}
+                    className="w-16 h-16 rounded-lg object-cover"
+                  />
                 )}
                 <div>
                   <p className="text-sm text-gray-500">Story</p>
-                  <h3 className="font-semibold text-gray-900">{storyTitle || 'Listen to the story'}</h3>
+                  <h3 className="font-semibold text-gray-900">
+                    {storyTitle || "Listen to the story"}
+                  </h3>
                 </div>
               </div>
               <button
@@ -115,8 +128,18 @@ export function StoryListeningActivity(props: ActivityTypeComponentProps): React
                 className="btn btn-primary px-6 py-2"
                 aria-label="Play story"
               >
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                <svg
+                  className="w-5 h-5 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                  />
                 </svg>
                 Listen to Story
               </button>
@@ -124,12 +147,12 @@ export function StoryListeningActivity(props: ActivityTypeComponentProps): React
           </div>
         )}
 
-        {renderQuestionPrompt({ 
+        {renderQuestionPrompt({
           prompt: question.prompt,
         })}
 
         <div className="grid grid-cols-1 gap-3">
-          {question.options.map((option) => (
+          {question.options.map((option) =>
             renderOptionButton({
               option,
               isSelected: selectedAnswer === option.id,
@@ -149,15 +172,25 @@ export function StoryListeningActivity(props: ActivityTypeComponentProps): React
                       className="btn btn-ghost p-2"
                       aria-label={`Play answer option`}
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
+                        />
                       </svg>
                     </button>
                   )}
                 </div>
               ),
-            })
-          ))}
+            }),
+          )}
         </div>
 
         {showFeedback && renderFeedback({ isCorrect })}

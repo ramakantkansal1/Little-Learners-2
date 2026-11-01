@@ -1,6 +1,21 @@
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode, useRef } from 'react';
-import { studentApi, curriculumApi, type StudentProfile, type DashboardData, type Subject, type LessonListItem } from '@services/api';
-import { useAuth } from '@hooks/useAuth';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  ReactNode,
+  useRef,
+} from "react";
+import {
+  studentApi,
+  curriculumApi,
+  type StudentProfile,
+  type DashboardData,
+  type Subject,
+  type LessonListItem,
+} from "@services/api";
+import { useAuth } from "@hooks/useAuth";
 
 interface StudentContextType {
   profile: StudentProfile | null;
@@ -36,7 +51,9 @@ export function StudentProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     isMounted.current = true;
-    return () => { isMounted.current = false; };
+    return () => {
+      isMounted.current = false;
+    };
   }, []);
 
   const refreshProfile = useCallback(async () => {
@@ -44,7 +61,7 @@ export function StudentProvider({ children }: { children: ReactNode }) {
       const response = await studentApi.getMyProfile();
       if (isMounted.current) setProfile(response.data);
     } catch (err) {
-      console.error('Failed to fetch profile:', err);
+      console.error("Failed to fetch profile:", err);
     }
   }, []);
 
@@ -53,7 +70,7 @@ export function StudentProvider({ children }: { children: ReactNode }) {
       const response = await studentApi.getDashboard();
       if (isMounted.current) setDashboard(response.data);
     } catch (err) {
-      console.error('Failed to fetch dashboard:', err);
+      console.error("Failed to fetch dashboard:", err);
     }
   }, []);
 
@@ -62,17 +79,20 @@ export function StudentProvider({ children }: { children: ReactNode }) {
       const response = await studentApi.getLessons();
       if (isMounted.current) setLessons(response.data);
     } catch (err) {
-      console.error('Failed to fetch lessons:', err);
+      console.error("Failed to fetch lessons:", err);
     }
   }, []);
 
   const refreshSubjects = useCallback(async () => {
     if (!profile?.current_stage_id) return;
     try {
-      const response = await curriculumApi.getSubjects({ stage_id: profile.current_stage_id, active_only: true });
+      const response = await curriculumApi.getSubjects({
+        stage_id: profile.current_stage_id,
+        active_only: true,
+      });
       if (isMounted.current) setSubjects(response.data);
     } catch (err) {
-      console.error('Failed to fetch subjects:', err);
+      console.error("Failed to fetch subjects:", err);
     }
   }, [profile?.current_stage_id]);
 
@@ -83,7 +103,7 @@ export function StudentProvider({ children }: { children: ReactNode }) {
       await refreshDashboard();
       await refreshLessons();
     } catch (err) {
-      console.error('Failed to change language:', err);
+      console.error("Failed to change language:", err);
       throw err;
     }
   };
@@ -93,7 +113,7 @@ export function StudentProvider({ children }: { children: ReactNode }) {
       await studentApi.updatePreferences({ audio_enabled: enabled });
       await refreshProfile();
     } catch (err) {
-      console.error('Failed to toggle audio:', err);
+      console.error("Failed to toggle audio:", err);
       throw err;
     }
   };
@@ -103,7 +123,7 @@ export function StudentProvider({ children }: { children: ReactNode }) {
       await studentApi.updatePreferences({ reduced_motion: enabled });
       await refreshProfile();
     } catch (err) {
-      console.error('Failed to toggle reduced motion:', err);
+      console.error("Failed to toggle reduced motion:", err);
       throw err;
     }
   };
@@ -113,7 +133,7 @@ export function StudentProvider({ children }: { children: ReactNode }) {
       await studentApi.updatePreferences({ high_contrast: enabled });
       await refreshProfile();
     } catch (err) {
-      console.error('Failed to toggle high contrast:', err);
+      console.error("Failed to toggle high contrast:", err);
       throw err;
     }
   };
@@ -126,9 +146,9 @@ export function StudentProvider({ children }: { children: ReactNode }) {
     const loadInitialData = async () => {
       // Wait for auth to be ready
       if (authLoading) return;
-      
+
       // Only load if authenticated as student
-      if (!isAuthenticated || user?.role !== 'student') {
+      if (!isAuthenticated || user?.role !== "student") {
         if (isMounted.current) setLoading(false);
         initialLoadCompleted.current = true;
         return;
@@ -150,8 +170,8 @@ export function StudentProvider({ children }: { children: ReactNode }) {
         }
       } catch (err) {
         if (isMounted.current) {
-          setError('Failed to load student data');
-          console.error('Failed to load initial data:', err);
+          setError("Failed to load student data");
+          console.error("Failed to load initial data:", err);
         }
       } finally {
         if (isMounted.current) {
@@ -162,43 +182,57 @@ export function StudentProvider({ children }: { children: ReactNode }) {
     };
 
     loadInitialData();
-  }, [authLoading, isAuthenticated, user, refreshProfile, refreshDashboard, refreshLessons, refreshSubjects, profile?.current_stage_id]);
+  }, [
+    authLoading,
+    isAuthenticated,
+    user,
+    refreshProfile,
+    refreshDashboard,
+    refreshLessons,
+    refreshSubjects,
+    profile?.current_stage_id,
+  ]);
 
   // Refresh subjects when profile changes (but not during initial load)
   useEffect(() => {
-    if (initialLoadCompleted.current && profile?.current_stage_id && subjects.length === 0) {
+    if (
+      initialLoadCompleted.current &&
+      profile?.current_stage_id &&
+      subjects.length === 0
+    ) {
       refreshSubjects();
     }
   }, [profile?.current_stage_id, subjects.length, refreshSubjects]);
 
   return (
-    <StudentContext.Provider value={{
-      profile,
-      dashboard,
-      lessons,
-      subjects,
-      loading,
-      error,
-      refreshProfile,
-      refreshDashboard,
-      refreshLessons,
-      refreshSubjects,
-      changeLanguage,
-      toggleAudio,
-      toggleReducedMotion,
-      toggleHighContrast,
-    }}>
+    <StudentContext.Provider
+      value={{
+        profile,
+        dashboard,
+        lessons,
+        subjects,
+        loading,
+        error,
+        refreshProfile,
+        refreshDashboard,
+        refreshLessons,
+        refreshSubjects,
+        changeLanguage,
+        toggleAudio,
+        toggleReducedMotion,
+        toggleHighContrast,
+      }}
+    >
       {children}
     </StudentContext.Provider>
   );
 }
 
- 
 // eslint-disable-next-line react-refresh/only-export-components
 export function useStudent() {
   const context = useContext(StudentContext);
   if (!context) {
-    throw new Error('useStudent must be used within a StudentProvider');
+    throw new Error("useStudent must be used within a StudentProvider");
   }
   return context;
 }

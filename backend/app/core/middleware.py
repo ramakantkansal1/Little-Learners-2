@@ -114,14 +114,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         current_time = time.time()
 
         # Determine rate limit based on path and environment
-        # Use more permissive limits in development for easier testing
-        is_development = settings.APP_ENV == "development"
+        # Use more permissive limits in development and E2E for easier testing
+        is_development = settings.APP_ENV in ("development", "e2e")
 
         # Separate rate limits for different auth endpoints
         # Use different counter keys for different path types to avoid cross-contamination
         if request.url.path == "/api/v1/auth/student/login" or request.url.path == "/api/v1/auth/parent/login":
             # Strict limit for actual login attempts
-            if is_development:
+            if settings.APP_ENV == "e2e":
+                max_requests = 2000  # Very high limit for E2E tests
+            elif is_development:
                 max_requests = settings.RATE_LIMIT_LOGIN_ATTEMPTS * 4  # 20 per 15 min in dev
             else:
                 max_requests = settings.RATE_LIMIT_LOGIN_ATTEMPTS
@@ -129,7 +131,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             counter_key = f"{client_key}:login"
         elif request.url.path.startswith("/api/v1/auth/"):
             # Higher limit for auth checks (GET /auth/me, POST /auth/refresh, etc.)
-            if is_development:
+            if settings.APP_ENV == "e2e":
+                max_requests = 5000  # Very high limit for E2E tests
+            elif is_development:
                 max_requests = settings.RATE_LIMIT_LOGIN_ATTEMPTS * 20  # 100 per 15 min in dev
             else:
                 max_requests = settings.RATE_LIMIT_LOGIN_ATTEMPTS * 5  # 25 per 15 min in prod
@@ -137,6 +141,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             counter_key = f"{client_key}:auth"
         else:
             max_requests = settings.RATE_LIMIT_API_REQUESTS
+            if settings.APP_ENV == "e2e":
+                max_requests = 10000  # Very high limit for E2E tests
             window_seconds = settings.RATE_LIMIT_API_WINDOW_MINUTES * 60
             counter_key = f"{client_key}:api"
 

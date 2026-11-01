@@ -1,4 +1,4 @@
-import { ActivityTypeComponentProps } from '../ActivityRenderer';
+import { ActivityTypeComponentProps } from "../ActivityRenderer";
 import {
   renderActivityHeader,
   renderProgress,
@@ -9,16 +9,18 @@ import {
   renderCompletionScreen,
   renderLoading,
   renderError,
-} from './BaseActivityComponents';
+} from "./BaseActivityComponents";
 
 /**
  * Number Recognition Activity Component.
  * Used for: number_recognition
- * 
+ *
  * Shows a number and asks to identify it.
  * Options are number choices.
  */
-export function NumberRecognitionActivity(props: ActivityTypeComponentProps): React.ReactElement {
+export function NumberRecognitionActivity(
+  props: ActivityTypeComponentProps,
+): React.ReactElement {
   const {
     activity,
     currentQuestion,
@@ -37,20 +39,24 @@ export function NumberRecognitionActivity(props: ActivityTypeComponentProps): Re
     audioEnabled,
     attemptId: _attemptId,
     loading,
-      recommendation,
-      recommendationLoading,
-      recommendationError,
-      startingRecommended,
-      onStartRecommended,
+    recommendation,
+    recommendationLoading,
+    recommendationError,
+    startingRecommended,
+    onStartRecommended,
     submitting,
     error,
   } = props;
 
   if (loading) return renderLoading();
-  if (error || !activity) return renderError({ error: error || 'Activity not found', onRetry });
+  if (error || !activity)
+    return renderError({ error: error || "Activity not found", onRetry });
 
   if (completed) {
-    const percentage = activity.questions.length > 0 ? Math.round((score / activity.questions.length) * 100) : 0;
+    const percentage =
+      activity.questions.length > 0
+        ? Math.round((score / activity.questions.length) * 100)
+        : 0;
     const earnedStar = percentage >= 80;
     return renderCompletionScreen({
       activity,
@@ -70,11 +76,15 @@ export function NumberRecognitionActivity(props: ActivityTypeComponentProps): Re
   }
 
   const question = activity.questions[currentQuestion];
-  const questionTypeLabel = activity.questions[0]?.question_type.replace('_', ' ') || 'Number Recognition';
+  const questionTypeLabel =
+    activity.questions[0]?.question_type.replace("_", " ") ||
+    "Number Recognition";
 
   // Get target number from configuration
-  const targetNumber = question.configuration?.targetNumber as number | undefined;
-  const showObjects = question.configuration?.showObjects as boolean | undefined;
+  const targetNumber = question.configuration?.targetNumber as
+    number | undefined;
+  const showObjects = question.configuration?.showObjects as
+    boolean | undefined;
   const objectEmoji = question.configuration?.objectEmoji as string | undefined;
 
   return (
@@ -91,29 +101,33 @@ export function NumberRecognitionActivity(props: ActivityTypeComponentProps): Re
 
       <div className="card p-6">
         <div className="text-center mb-6">
-          <div className="text-2xl font-semibold text-gray-700 mb-4">Find the number:</div>
+          <div className="text-2xl font-semibold text-gray-700 mb-4">
+            Find the number:
+          </div>
           <div className="flex justify-center">
             <div className="w-24 h-24 rounded-xl bg-green-100 flex items-center justify-center border-2 border-green-200">
               <span className="text-7xl font-bold text-green-700">
-                {targetNumber !== undefined ? targetNumber : '1'}
+                {targetNumber !== undefined ? targetNumber : "1"}
               </span>
             </div>
           </div>
           {showObjects && targetNumber && objectEmoji && (
             <div className="mt-4 flex justify-center gap-1">
               {Array.from({ length: targetNumber }).map((_, idx) => (
-                <span key={idx} className="text-4xl">{objectEmoji || '🔴'}</span>
+                <span key={idx} className="text-4xl">
+                  {objectEmoji || "🔴"}
+                </span>
               ))}
             </div>
           )}
         </div>
 
-        {renderQuestionPrompt({ 
+        {renderQuestionPrompt({
           prompt: question.prompt,
         })}
 
         <div className="grid grid-cols-3 gap-3">
-          {question.options.map((option) => (
+          {question.options.map((option) =>
             renderOptionButton({
               option,
               isSelected: selectedAnswer === option.id,
@@ -129,8 +143,8 @@ export function NumberRecognitionActivity(props: ActivityTypeComponentProps): Re
                   </div>
                 </div>
               ),
-            })
-          ))}
+            }),
+          )}
         </div>
 
         {showFeedback && renderFeedback({ isCorrect })}

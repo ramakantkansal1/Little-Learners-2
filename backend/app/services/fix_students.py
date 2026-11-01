@@ -43,7 +43,7 @@ new_method = '''    async def recommend_next_activity(
             .where(ActivityAttempt.activity_id == activity_id)
             .where(ActivityAttempt.student_id == student_id)
             .where(ActivityAttempt.status == "completed")
-            .order_by(ActivityAttempt.completed_at.desc().nullslast())
+            .order_by(ActivityAttempt.completed_at.desc())
             .limit(1)
         )
         attempt = attempt_result.scalar_one_or_none()

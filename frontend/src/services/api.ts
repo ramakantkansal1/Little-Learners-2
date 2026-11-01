@@ -1,18 +1,22 @@
-import axios, { AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
-import { useAuth } from '@hooks/useAuth';
+import axios, {
+  AxiosError,
+  AxiosRequestConfig,
+  InternalAxiosRequestConfig,
+} from "axios";
+import { useAuth } from "@hooks/useAuth";
 
 // Use relative URL to go through Vite proxy in development
 // In production, VITE_API_URL should be set to the full API URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || "/api/v1";
 
 // Generate or retrieve a unique client ID stored in localStorage
 function getClientId(): string {
-  if (typeof window === 'undefined') return 'server';
+  if (typeof window === "undefined") return "server";
 
-  let clientId = localStorage.getItem('client_id');
+  let clientId = localStorage.getItem("client_id");
   if (!clientId) {
     clientId = crypto.randomUUID();
-    localStorage.setItem('client_id', clientId);
+    localStorage.setItem("client_id", clientId);
   }
   return clientId;
 }
@@ -20,7 +24,7 @@ function getClientId(): string {
 export const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
   withCredentials: true,
 });
@@ -32,11 +36,11 @@ async function ensureCsrfToken(): Promise<string | null> {
   if (csrfToken) return csrfToken;
 
   try {
-    const response = await api.get<{ csrf_token: string }>('/auth/csrf-token');
+    const response = await api.get<{ csrf_token: string }>("/auth/csrf-token");
     csrfToken = response.data.csrf_token;
     return csrfToken;
   } catch (err) {
-    console.error('Failed to fetch CSRF token:', err);
+    console.error("Failed to fetch CSRF token:", err);
     return null;
   }
 }
@@ -48,21 +52,21 @@ api.interceptors.request.use(
     // Add client ID for rate limiting (helps in Docker environments)
     const clientId = getClientId();
     if (clientId && config.headers) {
-      config.headers['X-Client-ID'] = clientId;
+      config.headers["X-Client-ID"] = clientId;
     }
 
     // Add CSRF token for state-changing methods
-    const csrfMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
+    const csrfMethods = ["POST", "PUT", "PATCH", "DELETE"];
     if (config.method && csrfMethods.includes(config.method.toUpperCase())) {
       const token = await ensureCsrfToken();
       if (token && config.headers) {
-        config.headers['X-CSRF-Token'] = token;
+        config.headers["X-CSRF-Token"] = token;
       }
     }
 
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
 // Track if a token refresh is already in progress to prevent multiple simultaneous refreshes
@@ -74,7 +78,7 @@ function subscribeTokenRefresh(cb: () => void) {
 }
 
 function onTokenRefreshed() {
-  refreshSubscribers.forEach(cb => cb());
+  refreshSubscribers.forEach((cb) => cb());
   refreshSubscribers = [];
 }
 
@@ -82,9 +86,11 @@ function onTokenRefreshed() {
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
+    const originalRequest = error.config as AxiosRequestConfig & {
+      _retry?: boolean;
+    };
     const status = error.response?.status;
-    const requestUrl = originalRequest.url || '';
+    const requestUrl = originalRequest.url || "";
 
     // Do not retry on 403 (forbidden) or 429 (rate limited) - these are not auth issues
     if (status === 403 || status === 429) {
@@ -96,8 +102,11 @@ api.interceptors.response.use(
     }
 
     // Skip token refresh for login endpoints - they should return 401 for invalid credentials
-    const isLoginEndpoint = requestUrl.includes('/auth/') &&
-      (requestUrl.includes('/student/login') || requestUrl.includes('/parent/login') || requestUrl.includes('/parent/register'));
+    const isLoginEndpoint =
+      requestUrl.includes("/auth/") &&
+      (requestUrl.includes("/student/login") ||
+        requestUrl.includes("/parent/login") ||
+        requestUrl.includes("/parent/register"));
 
     // Handle 401 Unauthorized with token refresh (skip for login endpoints)
     if (status === 401 && !originalRequest._retry && !isLoginEndpoint) {
@@ -130,15 +139,15 @@ api.interceptors.response.use(
         } else {
           onTokenRefreshed();
           useAuth.getState().clearAuth();
-          if (typeof window !== 'undefined') {
-            window.location.href = '/auth/parent/login';
+          if (typeof window !== "undefined") {
+            window.location.href = "/auth/parent/login";
           }
         }
       } catch (refreshError) {
         onTokenRefreshed();
         useAuth.getState().clearAuth();
-        if (typeof window !== 'undefined') {
-          window.location.href = '/auth/parent/login';
+        if (typeof window !== "undefined") {
+          window.location.href = "/auth/parent/login";
         }
         return Promise.reject(refreshError);
       } finally {
@@ -147,7 +156,7 @@ api.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 // API response types
@@ -177,7 +186,7 @@ export const handleApiError = (error: unknown): string => {
     }
     return error.message;
   }
-  return 'An unexpected error occurred';
+  return "An unexpected error occurred";
 };
 
 // ===========================================
@@ -261,19 +270,26 @@ export interface Activity {
 
 export const curriculumApi = {
   getStages: (activeOnly = true) =>
-    api.get<Stage[]>('/curriculum/stages', { params: { active_only: activeOnly } }),
+    api.get<Stage[]>("/curriculum/stages", {
+      params: { active_only: activeOnly },
+    }),
 
   getStage: (stageId: number) =>
     api.get<Stage>(`/curriculum/stages/${stageId}`),
 
   getDomainsForStage: (stageId: number, activeOnly = true) =>
-    api.get<Domain[]>(`/curriculum/stages/${stageId}/domains`, { params: { active_only: activeOnly } }),
+    api.get<Domain[]>(`/curriculum/stages/${stageId}/domains`, {
+      params: { active_only: activeOnly },
+    }),
 
-  getSubjects: (params?: { stage_id?: number; domain_id?: number; active_only?: boolean }) =>
-    api.get<Subject[]>('/curriculum/subjects', { params }),
+  getSubjects: (params?: {
+    stage_id?: number;
+    domain_id?: number;
+    active_only?: boolean;
+  }) => api.get<Subject[]>("/curriculum/subjects", { params }),
 
   getTopics: (params?: { subject_id?: number; active_only?: boolean }) =>
-    api.get<Topic[]>('/curriculum/topics', { params }),
+    api.get<Topic[]>("/curriculum/topics", { params }),
 
   getLessons: (params?: {
     stage_id?: number;
@@ -284,14 +300,17 @@ export const curriculumApi = {
     active_only?: boolean;
     limit?: number;
     offset?: number;
-  }) =>
-    api.get<Lesson[]>('/curriculum/lessons', { params }),
+  }) => api.get<Lesson[]>("/curriculum/lessons", { params }),
 
-  getLesson: (lessonId: number, language = 'en') =>
-    api.get<Lesson>(`/curriculum/lessons/${lessonId}`, { params: { language } }),
+  getLesson: (lessonId: number, language = "en") =>
+    api.get<Lesson>(`/curriculum/lessons/${lessonId}`, {
+      params: { language },
+    }),
 
-  getLessonActivities: (lessonId: number, language = 'en', activeOnly = true) =>
-    api.get<Activity[]>(`/curriculum/lessons/${lessonId}/activities`, { params: { language, active_only: activeOnly } }),
+  getLessonActivities: (lessonId: number, language = "en", activeOnly = true) =>
+    api.get<Activity[]>(`/curriculum/lessons/${lessonId}/activities`, {
+      params: { language, active_only: activeOnly },
+    }),
 
   getActivities: (params?: {
     lesson_id?: number;
@@ -299,11 +318,12 @@ export const curriculumApi = {
     status?: string;
     language?: string;
     active_only?: boolean;
-  }) =>
-    api.get<Activity[]>('/curriculum/activities', { params }),
+  }) => api.get<Activity[]>("/curriculum/activities", { params }),
 
-  getActivity: (activityId: number, language = 'en') =>
-    api.get<Activity>(`/curriculum/activities/${activityId}`, { params: { language } }),
+  getActivity: (activityId: number, language = "en") =>
+    api.get<Activity>(`/curriculum/activities/${activityId}`, {
+      params: { language },
+    }),
 };
 
 // ===========================================
@@ -426,14 +446,12 @@ export interface ChildAnalytics {
 }
 
 export const parentApi = {
-  getMyProfile: () =>
-    api.get<ParentProfile>('/parents/me'),
+  getMyProfile: () => api.get<ParentProfile>("/parents/me"),
 
-  getChildren: () =>
-    api.get<Child[]>('/parents/me/children'),
+  getChildren: () => api.get<Child[]>("/parents/me/children"),
 
   createChild: (data: ChildCreateRequest) =>
-    api.post<Child>('/parents/me/children', data),
+    api.post<Child>("/parents/me/children", data),
 
   getChild: (childId: number) =>
     api.get<Child>(`/parents/me/children/${childId}`),
@@ -589,7 +607,11 @@ export interface AttemptStartResponse {
       display_order: number;
     }>;
   }>;
-  saved_progress?: { current_question_index?: number; selected_answer_id?: number; accumulated_score?: number } | null;
+  saved_progress?: {
+    current_question_index?: number;
+    selected_answer_id?: number;
+    accumulated_score?: number;
+  } | null;
   lesson_progress?: {
     completion_percentage: number;
     status: string;
@@ -601,7 +623,11 @@ export interface AnswerSubmitResponse {
   is_correct: boolean;
   points_earned: number;
   correct_options: number[];
-  saved_progress?: { current_question_index?: number; selected_answer_id?: number; accumulated_score?: number } | null;
+  saved_progress?: {
+    current_question_index?: number;
+    selected_answer_id?: number;
+    accumulated_score?: number;
+  } | null;
   lesson_progress?: {
     completion_percentage: number;
     status: string;
@@ -660,44 +686,51 @@ export interface HistoryItem {
 }
 
 export const studentApi = {
-  getMyProfile: () =>
-    api.get<StudentProfile>('/students/me'),
+  getMyProfile: () => api.get<StudentProfile>("/students/me"),
 
-  getDashboard: () =>
-    api.get<DashboardData>('/students/me/dashboard'),
+  getDashboard: () => api.get<DashboardData>("/students/me/dashboard"),
 
   getLessons: (params?: { stage_id?: number; subject_id?: number }) =>
-    api.get<LessonListItem[]>('/students/me/lessons', { params }),
+    api.get<LessonListItem[]>("/students/me/lessons", { params }),
 
   getLessonContent: (lessonId: number) =>
     api.get(`/students/me/learn/${lessonId}`),
 
   startActivityAttempt: (activityId: number) =>
-    api.post<AttemptStartResponse>(`/students/me/activities/${activityId}/attempts`),
+    api.post<AttemptStartResponse>(
+      `/students/me/activities/${activityId}/attempts`,
+    ),
 
   getActivityAttempt: (attemptId: number) =>
     api.get<AttemptStartResponse>(`/students/me/attempts/${attemptId}`),
 
-  submitAnswer: (attemptId: number, questionId: number, selectedOptionIds: number[]) =>
-    api.post<AnswerSubmitResponse>(`/students/attempts/${attemptId}/responses`, {
-      question_id: questionId,
-      selected_option_ids: selectedOptionIds
-    }),
+  submitAnswer: (
+    attemptId: number,
+    questionId: number,
+    selectedOptionIds: number[],
+  ) =>
+    api.post<AnswerSubmitResponse>(
+      `/students/attempts/${attemptId}/responses`,
+      {
+        question_id: questionId,
+        selected_option_ids: selectedOptionIds,
+      },
+    ),
 
   completeAttempt: (attemptId: number) =>
-    api.post<AttemptCompleteResponse>(`/students/attempts/${attemptId}/complete`),
+    api.post<AttemptCompleteResponse>(
+      `/students/attempts/${attemptId}/complete`,
+    ),
 
-  getRewards: () =>
-    api.get<Reward[]>('/students/me/rewards'),
+  getRewards: () => api.get<Reward[]>("/students/me/rewards"),
 
-  getHistory: () =>
-    api.get<HistoryItem[]>('/students/me/history'),
+  getHistory: () => api.get<HistoryItem[]>("/students/me/history"),
 
   getNextActivity: () =>
-    api.get<NextActivityRecommendation>('/students/me/next-activity'),
+    api.get<NextActivityRecommendation>("/students/me/next-activity"),
 
   updatePreferences: (prefs: Record<string, unknown>) =>
-    api.patch('/students/me/preferences', prefs),
+    api.patch("/students/me/preferences", prefs),
 };
 
 // ===========================================
@@ -753,7 +786,7 @@ export const progressApi = {
 
   createEnrollment: (studentId: number, stageId: number, subjectId?: number) =>
     api.post<Enrollment>(`/progress/students/${studentId}/enrollments`, null, {
-      params: { stage_id: stageId, subject_id: subjectId }
+      params: { stage_id: stageId, subject_id: subjectId },
     }),
 
   getLessonProgress: (studentId: number) =>
@@ -761,7 +794,7 @@ export const progressApi = {
 
   getActivityAttempts: (studentId: number, lessonId?: number) =>
     api.get<ActivityAttempt[]>(`/progress/students/${studentId}/activities`, {
-      params: { lesson_id: lessonId }
+      params: { lesson_id: lessonId },
     }),
 
   getChildProgressSummary: (childId: number) =>
@@ -864,7 +897,11 @@ export interface AnalyticsData {
   registrations_by_day: Array<{ date: string; count: number }>;
   lessons_completed_by_day: Array<{ date: string; count: number }>;
   active_users_by_day: Array<{ date: string; count: number }>;
-  popular_activities: Array<{ activity_code: string; type: string; attempts: number }>;
+  popular_activities: Array<{
+    activity_code: string;
+    type: string;
+    attempts: number;
+  }>;
   average_session_time: number;
   completion_rates_by_stage: Array<{
     stage_code: string;
@@ -897,8 +934,7 @@ export interface ActivityDifficultyTierResponse {
 }
 
 export const adminApi = {
-  getDashboard: () =>
-    api.get<AdminDashboardMetrics>('/admin/dashboard'),
+  getDashboard: () => api.get<AdminDashboardMetrics>("/admin/dashboard"),
 
   getUsers: (params?: {
     role?: string;
@@ -906,14 +942,12 @@ export const adminApi = {
     search?: string;
     limit?: number;
     offset?: number;
-  }) =>
-    api.get<AdminUser[]>('/admin/users', { params }),
+  }) => api.get<AdminUser[]>("/admin/users", { params }),
 
   updateUser: (userId: number, data: { is_active?: boolean; role?: string }) =>
     api.patch(`/admin/users/${userId}`, data),
 
-  getStages: () =>
-    api.get<AdminStage[]>('/admin/stages'),
+  getStages: () => api.get<AdminStage[]>("/admin/stages"),
 
   createStage: (data: {
     code: string;
@@ -925,14 +959,12 @@ export const adminApi = {
     icon?: string;
     color?: string;
     is_active?: boolean;
-  }) =>
-    api.post<AdminStage>('/admin/stages', data),
+  }) => api.post<AdminStage>("/admin/stages", data),
 
   updateStage: (stageId: number, data: Partial<AdminStage>) =>
     api.patch<AdminStage>(`/admin/stages/${stageId}`, data),
 
-  deleteStage: (stageId: number) =>
-    api.delete(`/admin/stages/${stageId}`),
+  deleteStage: (stageId: number) => api.delete(`/admin/stages/${stageId}`),
 
   getLessons: (params?: {
     stage_id?: number;
@@ -940,8 +972,7 @@ export const adminApi = {
     status?: string;
     limit?: number;
     offset?: number;
-  }) =>
-    api.get<AdminLesson[]>(`/admin/lessons`, { params }),
+  }) => api.get<AdminLesson[]>(`/admin/lessons`, { params }),
 
   createLesson: (data: {
     topic_id: number;
@@ -953,22 +984,35 @@ export const adminApi = {
     instructions?: string;
     display_order?: number;
     is_active?: boolean;
-    translations?: Array<{ language: string; title: string; description?: string; instructions?: string; audio_url?: string }>;
-  }) =>
-    api.post<AdminLesson>(`/admin/lessons`, data),
+    translations?: Array<{
+      language: string;
+      title: string;
+      description?: string;
+      instructions?: string;
+      audio_url?: string;
+    }>;
+  }) => api.post<AdminLesson>(`/admin/lessons`, data),
 
-  updateLesson: (lessonId: number, data: {
-    topic_id?: number;
-    status?: string;
-    version?: number;
-    estimated_duration_minutes?: number;
-    thumbnail_url?: string;
-    instructions?: string;
-    display_order?: number;
-    is_active?: boolean;
-    translations?: Array<{ language: string; title: string; description?: string; instructions?: string; audio_url?: string }>;
-  }) =>
-    api.patch<AdminLesson>(`/admin/lessons/${lessonId}`, data),
+  updateLesson: (
+    lessonId: number,
+    data: {
+      topic_id?: number;
+      status?: string;
+      version?: number;
+      estimated_duration_minutes?: number;
+      thumbnail_url?: string;
+      instructions?: string;
+      display_order?: number;
+      is_active?: boolean;
+      translations?: Array<{
+        language: string;
+        title: string;
+        description?: string;
+        instructions?: string;
+        audio_url?: string;
+      }>;
+    },
+  ) => api.patch<AdminLesson>(`/admin/lessons/${lessonId}`, data),
 
   publishLesson: (lessonId: number) =>
     api.post<ValidationResult>(`/admin/lessons/${lessonId}/publish`),
@@ -987,8 +1031,7 @@ export const adminApi = {
     domain_id?: number;
     limit?: number;
     offset?: number;
-  }) =>
-    api.get<AdminSubject[]>(`/admin/subjects`, { params }),
+  }) => api.get<AdminSubject[]>(`/admin/subjects`, { params }),
 
   createSubject: (data: {
     stage_id: number;
@@ -1000,20 +1043,21 @@ export const adminApi = {
     icon?: string;
     color?: string;
     is_active?: boolean;
-  }) =>
-    api.post<AdminSubject>(`/admin/subjects`, data),
+  }) => api.post<AdminSubject>(`/admin/subjects`, data),
 
-  updateSubject: (subjectId: number, data: {
-    stage_id?: number;
-    domain_id?: number;
-    name?: string;
-    description?: string;
-    display_order?: number;
-    icon?: string;
-    color?: string;
-    is_active?: boolean;
-  }) =>
-    api.patch<AdminSubject>(`/admin/subjects/${subjectId}`, data),
+  updateSubject: (
+    subjectId: number,
+    data: {
+      stage_id?: number;
+      domain_id?: number;
+      name?: string;
+      description?: string;
+      display_order?: number;
+      icon?: string;
+      color?: string;
+      is_active?: boolean;
+    },
+  ) => api.patch<AdminSubject>(`/admin/subjects/${subjectId}`, data),
 
   deleteSubject: (subjectId: number) =>
     api.delete(`/admin/subjects/${subjectId}`),
@@ -1024,8 +1068,7 @@ export const adminApi = {
     status?: string;
     limit?: number;
     offset?: number;
-  }) =>
-    api.get<AdminActivity[]>(`/admin/activities`, { params }),
+  }) => api.get<AdminActivity[]>(`/admin/activities`, { params }),
 
   createActivity: (data: {
     lesson_id: number;
@@ -1038,23 +1081,34 @@ export const adminApi = {
     instructions?: string;
     configuration?: Record<string, unknown>;
     is_active?: boolean;
-    translations?: Array<{ language: string; title: string; instructions?: string; audio_url?: string }>;
-  }) =>
-    api.post<AdminActivity>(`/admin/activities`, data),
+    translations?: Array<{
+      language: string;
+      title: string;
+      instructions?: string;
+      audio_url?: string;
+    }>;
+  }) => api.post<AdminActivity>(`/admin/activities`, data),
 
-  updateActivity: (activityId: number, data: {
-    lesson_id?: number;
-    type?: string;
-    status?: string;
-    version?: number;
-    display_order?: number;
-    estimated_duration_minutes?: number;
-    instructions?: string;
-    configuration?: Record<string, unknown>;
-    is_active?: boolean;
-    translations?: Array<{ language: string; title: string; instructions?: string; audio_url?: string }>;
-  }) =>
-    api.patch<AdminActivity>(`/admin/activities/${activityId}`, data),
+  updateActivity: (
+    activityId: number,
+    data: {
+      lesson_id?: number;
+      type?: string;
+      status?: string;
+      version?: number;
+      display_order?: number;
+      estimated_duration_minutes?: number;
+      instructions?: string;
+      configuration?: Record<string, unknown>;
+      is_active?: boolean;
+      translations?: Array<{
+        language: string;
+        title: string;
+        instructions?: string;
+        audio_url?: string;
+      }>;
+    },
+  ) => api.patch<AdminActivity>(`/admin/activities/${activityId}`, data),
 
   deleteActivity: (activityId: number) =>
     api.delete(`/admin/activities/${activityId}`),
@@ -1073,20 +1127,26 @@ export const adminApi = {
     end_date?: string;
     limit?: number;
     offset?: number;
-  }) =>
-    api.get(`/admin/audit-logs`, { params }),
+  }) => api.get(`/admin/audit-logs`, { params }),
 
-  getSettings: () =>
-    api.get('/admin/settings'),
+  getSettings: () => api.get("/admin/settings"),
 
   updateSettings: (data: Record<string, unknown>) =>
-    api.patch('/admin/settings', data),
+    api.patch("/admin/settings", data),
 
   getActivityDifficultyTier: (activityId: number) =>
-    api.get<ActivityDifficultyTierResponse>(`/admin/activities/${activityId}/difficulty-tier`),
+    api.get<ActivityDifficultyTierResponse>(
+      `/admin/activities/${activityId}/difficulty-tier`,
+    ),
 
-  updateActivityDifficultyTier: (activityId: number, difficultyTier: number | null) =>
-    api.patch<ActivityDifficultyTierResponse>(`/admin/activities/${activityId}/difficulty-tier`, { difficulty_tier: difficultyTier }),
+  updateActivityDifficultyTier: (
+    activityId: number,
+    difficultyTier: number | null,
+  ) =>
+    api.patch<ActivityDifficultyTierResponse>(
+      `/admin/activities/${activityId}/difficulty-tier`,
+      { difficulty_tier: difficultyTier },
+    ),
 };
 
 // ===========================================
@@ -1107,13 +1167,13 @@ export interface MediaAsset {
   alt_text: string | null;
   caption: string | null;
   source: string | null;
-  license: string | null,
-  attribution: string | null,
-  language: string | null,
-  tags: string[] | null,
-  is_processed: boolean,
-  processing_error: string | null,
-  created_at: string,
+  license: string | null;
+  attribution: string | null;
+  language: string | null;
+  tags: string[] | null;
+  is_processed: boolean;
+  processing_error: string | null;
+  created_at: string;
 }
 
 export const mediaApi = {
@@ -1123,34 +1183,34 @@ export const mediaApi = {
     is_processed?: boolean;
     limit?: number;
     offset?: number;
-  }) =>
-    api.get<MediaAsset[]>('/media', { params }),
+  }) => api.get<MediaAsset[]>("/media", { params }),
 
-  get: (mediaId: number) =>
-    api.get<MediaAsset>(`/media/${mediaId}`),
+  get: (mediaId: number) => api.get<MediaAsset>(`/media/${mediaId}`),
 
-  upload: (file: File, data: {
-    media_type: string;
-    language?: string;
-    alt_text?: string;
-    caption?: string;
-    source?: string;
-    license?: string;
-    attribution?: string;
-    tags?: string;
-  }) => {
+  upload: (
+    file: File,
+    data: {
+      media_type: string;
+      language?: string;
+      alt_text?: string;
+      caption?: string;
+      source?: string;
+      license?: string;
+      attribution?: string;
+      tags?: string;
+    },
+  ) => {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
     Object.entries(data).forEach(([key, value]) => {
       if (value !== undefined) formData.append(key, String(value));
     });
-    return api.post<MediaAsset>('/media/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+    return api.post<MediaAsset>("/media/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
     });
   },
 
-  delete: (mediaId: number) =>
-    api.delete(`/media/${mediaId}`),
+  delete: (mediaId: number) => api.delete(`/media/${mediaId}`),
 
   getLessonMedia: (lessonId: number) =>
     api.get<MediaAsset[]>(`/media/lessons/${lessonId}/media`),

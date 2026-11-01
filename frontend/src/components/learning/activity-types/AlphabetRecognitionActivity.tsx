@@ -1,4 +1,4 @@
-import { ActivityTypeComponentProps } from '../ActivityRenderer';
+import { ActivityTypeComponentProps } from "../ActivityRenderer";
 import {
   renderActivityHeader,
   renderProgress,
@@ -9,16 +9,18 @@ import {
   renderCompletionScreen,
   renderLoading,
   renderError,
-} from './BaseActivityComponents';
+} from "./BaseActivityComponents";
 
 /**
  * Alphabet Recognition Activity Component.
  * Used for: alphabet_recognition
- * 
+ *
  * Shows a letter and asks to identify it.
  * Options are letter choices.
  */
-export function AlphabetRecognitionActivity(props: ActivityTypeComponentProps): React.ReactElement {
+export function AlphabetRecognitionActivity(
+  props: ActivityTypeComponentProps,
+): React.ReactElement {
   const {
     activity,
     currentQuestion,
@@ -37,20 +39,24 @@ export function AlphabetRecognitionActivity(props: ActivityTypeComponentProps): 
     audioEnabled,
     attemptId: _attemptId,
     loading,
-      recommendation,
-      recommendationLoading,
-      recommendationError,
-      startingRecommended,
-      onStartRecommended,
+    recommendation,
+    recommendationLoading,
+    recommendationError,
+    startingRecommended,
+    onStartRecommended,
     submitting,
     error,
   } = props;
 
   if (loading) return renderLoading();
-  if (error || !activity) return renderError({ error: error || 'Activity not found', onRetry });
+  if (error || !activity)
+    return renderError({ error: error || "Activity not found", onRetry });
 
   if (completed) {
-    const percentage = activity.questions.length > 0 ? Math.round((score / activity.questions.length) * 100) : 0;
+    const percentage =
+      activity.questions.length > 0
+        ? Math.round((score / activity.questions.length) * 100)
+        : 0;
     const earnedStar = percentage >= 80;
     return renderCompletionScreen({
       activity,
@@ -70,12 +76,17 @@ export function AlphabetRecognitionActivity(props: ActivityTypeComponentProps): 
   }
 
   const question = activity.questions[currentQuestion];
-  const questionTypeLabel = activity.questions[0]?.question_type.replace('_', ' ') || 'Alphabet Recognition';
+  const questionTypeLabel =
+    activity.questions[0]?.question_type.replace("_", " ") ||
+    "Alphabet Recognition";
 
   // Get target letter from configuration
-  const targetLetter = question.configuration?.targetLetter as string | undefined;
-  const targetLetterCase = question.configuration?.targetLetterCase as 'upper' | 'lower' | undefined;
-  const showBothCases = question.configuration?.showBothCases as boolean | undefined;
+  const targetLetter = question.configuration?.targetLetter as
+    string | undefined;
+  const targetLetterCase = question.configuration?.targetLetterCase as
+    "upper" | "lower" | undefined;
+  const showBothCases = question.configuration?.showBothCases as
+    boolean | undefined;
 
   return (
     <div className="space-y-6">
@@ -92,14 +103,20 @@ export function AlphabetRecognitionActivity(props: ActivityTypeComponentProps): 
       <div className="card p-6">
         <div className="text-center mb-6">
           <div className="text-2xl font-semibold text-gray-700 mb-4">
-            {question.prompt.includes('upper') || question.prompt.includes('capital') ? 'Find the capital letter:' : 
-             question.prompt.includes('lower') || question.prompt.includes('small') ? 'Find the small letter:' :
-             'Find the letter:'}
+            {question.prompt.includes("upper") ||
+            question.prompt.includes("capital")
+              ? "Find the capital letter:"
+              : question.prompt.includes("lower") ||
+                  question.prompt.includes("small")
+                ? "Find the small letter:"
+                : "Find the letter:"}
           </div>
           <div className="flex justify-center">
             <div className="w-24 h-24 rounded-xl bg-primary-100 flex items-center justify-center border-2 border-primary-200">
-              <span className={`text-7xl font-bold ${targetLetterCase === 'lower' ? 'lowercase' : 'uppercase'} text-primary-700`}>
-                {targetLetter || 'A'}
+              <span
+                className={`text-7xl font-bold ${targetLetterCase === "lower" ? "lowercase" : "uppercase"} text-primary-700`}
+              >
+                {targetLetter || "A"}
               </span>
             </div>
           </div>
@@ -110,12 +127,12 @@ export function AlphabetRecognitionActivity(props: ActivityTypeComponentProps): 
           )}
         </div>
 
-        {renderQuestionPrompt({ 
+        {renderQuestionPrompt({
           prompt: question.prompt,
         })}
 
         <div className="grid grid-cols-3 gap-3">
-          {question.options.map((option) => (
+          {question.options.map((option) =>
             renderOptionButton({
               option,
               isSelected: selectedAnswer === option.id,
@@ -131,8 +148,8 @@ export function AlphabetRecognitionActivity(props: ActivityTypeComponentProps): 
                   </div>
                 </div>
               ),
-            })
-          ))}
+            }),
+          )}
         </div>
 
         {showFeedback && renderFeedback({ isCorrect })}

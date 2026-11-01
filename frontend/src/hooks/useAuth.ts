@@ -1,11 +1,11 @@
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { api } from '@services/api';
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+import { api } from "@services/api";
 
 export interface User {
   id: number;
   email: string | null;
-  role: 'admin' | 'parent' | 'student';
+  role: "admin" | "parent" | "student";
   isVerified: boolean;
 }
 
@@ -55,9 +55,9 @@ export const useAuth = create<AuthState>()(
       logout: async () => {
         try {
           // Call backend logout endpoint to revoke tokens and clear cookies
-          await api.post('/auth/logout');
+          await api.post("/auth/logout");
         } catch (error) {
-          console.error('Logout API call failed:', error);
+          console.error("Logout API call failed:", error);
         } finally {
           // Always clear local state
           set({
@@ -81,7 +81,7 @@ export const useAuth = create<AuthState>()(
 
         try {
           // Try to get current user info
-          const response = await api.get('/auth/me');
+          const response = await api.get("/auth/me");
           set({
             user: response.data,
             isAuthenticated: true,
@@ -102,7 +102,7 @@ export const useAuth = create<AuthState>()(
 
         try {
           // Backend reads refresh token from cookie (withCredentials: true sends cookies automatically)
-          const response = await api.post('/auth/refresh');
+          const response = await api.post("/auth/refresh");
           const { access_token, refresh_token, user } = response.data;
           set({
             user,
@@ -123,18 +123,18 @@ export const useAuth = create<AuthState>()(
       },
     }),
     {
-      name: 'auth-storage',
+      name: "auth-storage",
       partialize: (state) => ({
         user: state.user,
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
-    }
-  )
+    },
+  ),
 );
 
 // Initialize auth on app load
-if (typeof window !== 'undefined') {
+if (typeof window !== "undefined") {
   useAuth.getState().checkAuth();
 }

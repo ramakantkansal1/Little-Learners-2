@@ -17,6 +17,7 @@ from app.models import (
     LearningStage, LearningDomain, Subject, Topic, LearningObjective,
     Lesson, Activity, Question, AnswerOption, StudentReward,
     ParentStudentRelationship, ParentNotification, AuditLog,
+    ActivityAttempt, StudentLessonProgress,
     ContentStatusEnum, ActivityTypeEnum, EnrollmentStatusEnum
 )
 from app.permissions.dependencies import get_current_user, require_permission

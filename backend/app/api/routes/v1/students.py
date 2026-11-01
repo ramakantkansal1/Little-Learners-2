@@ -8,7 +8,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -1422,7 +1422,7 @@ async def get_next_activity_recommendation(
         select(ActivityAttempt)
         .where(ActivityAttempt.student_id == student.id)
         .where(ActivityAttempt.status == "completed")
-        .order_by(ActivityAttempt.completed_at.desc().nullslast())
+        .order_by(ActivityAttempt.completed_at.desc())
         .limit(1)
     )
     latest_attempt = latest_attempt_result.scalar_one_or_none()

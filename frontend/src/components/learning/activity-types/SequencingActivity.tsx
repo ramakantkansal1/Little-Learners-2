@@ -1,4 +1,4 @@
-import { ActivityTypeComponentProps } from '../ActivityRenderer';
+import { ActivityTypeComponentProps } from "../ActivityRenderer";
 import {
   renderActivityHeader,
   renderProgress,
@@ -9,16 +9,18 @@ import {
   renderCompletionScreen,
   renderLoading,
   renderError,
-} from './BaseActivityComponents';
+} from "./BaseActivityComponents";
 
 /**
  * Sequencing Activity Component.
  * Used for: sequencing
- * 
+ *
  * Shows a sequence with missing items and asks to complete it.
  * Options are the possible next items.
  */
-export function SequencingActivity(props: ActivityTypeComponentProps): React.ReactElement {
+export function SequencingActivity(
+  props: ActivityTypeComponentProps,
+): React.ReactElement {
   const {
     activity,
     currentQuestion,
@@ -37,20 +39,24 @@ export function SequencingActivity(props: ActivityTypeComponentProps): React.Rea
     audioEnabled,
     attemptId: _attemptId,
     loading,
-      recommendation,
-      recommendationLoading,
-      recommendationError,
-      startingRecommended,
-      onStartRecommended,
+    recommendation,
+    recommendationLoading,
+    recommendationError,
+    startingRecommended,
+    onStartRecommended,
     submitting,
     error,
   } = props;
 
   if (loading) return renderLoading();
-  if (error || !activity) return renderError({ error: error || 'Activity not found', onRetry });
+  if (error || !activity)
+    return renderError({ error: error || "Activity not found", onRetry });
 
   if (completed) {
-    const percentage = activity.questions.length > 0 ? Math.round((score / activity.questions.length) * 100) : 0;
+    const percentage =
+      activity.questions.length > 0
+        ? Math.round((score / activity.questions.length) * 100)
+        : 0;
     const earnedStar = percentage >= 80;
     return renderCompletionScreen({
       activity,
@@ -70,11 +76,14 @@ export function SequencingActivity(props: ActivityTypeComponentProps): React.Rea
   }
 
   const question = activity.questions[currentQuestion];
-  const questionTypeLabel = activity.questions[0]?.question_type.replace('_', ' ') || 'Sequencing';
+  const questionTypeLabel =
+    activity.questions[0]?.question_type.replace("_", " ") || "Sequencing";
 
   // Get sequence from configuration
-  const sequence = question.configuration?.sequence as Array<{ value: string; emoji?: string; isMissing?: boolean }> | undefined;
-  const _patternType = question.configuration?.patternType as 'numbers' | 'letters' | 'shapes' | 'colors' | 'custom' | undefined;
+  const sequence = question.configuration?.sequence as
+    Array<{ value: string; emoji?: string; isMissing?: boolean }> | undefined;
+  const _patternType = question.configuration?.patternType as
+    "numbers" | "letters" | "shapes" | "colors" | "custom" | undefined;
   // _patternType is reserved for future pattern validation logic
   void _patternType;
 
@@ -92,8 +101,10 @@ export function SequencingActivity(props: ActivityTypeComponentProps): React.Rea
 
       <div className="card p-6">
         <div className="text-center mb-6">
-          <div className="text-2xl font-semibold text-gray-700 mb-4">Complete the pattern:</div>
-          
+          <div className="text-2xl font-semibold text-gray-700 mb-4">
+            Complete the pattern:
+          </div>
+
           {sequence && sequence.length > 0 && (
             <div className="flex flex-wrap justify-center gap-3 mb-4">
               {sequence.map((item, idx) => (
@@ -101,28 +112,34 @@ export function SequencingActivity(props: ActivityTypeComponentProps): React.Rea
                   key={idx}
                   className={`w-16 h-16 rounded-xl flex items-center justify-center border-2 transition-all ${
                     item.isMissing
-                      ? 'border-dashed border-gray-400 bg-gray-50 animate-pulse'
-                      : 'border-solid border-gray-200 bg-white shadow-sm'
+                      ? "border-dashed border-gray-400 bg-gray-50 animate-pulse"
+                      : "border-solid border-gray-200 bg-white shadow-sm"
                   }`}
                 >
                   {item.emoji ? (
                     <span className="text-4xl">{item.emoji}</span>
                   ) : (
-                    <span className="text-3xl font-bold text-gray-700">{item.value}</span>
+                    <span className="text-3xl font-bold text-gray-700">
+                      {item.value}
+                    </span>
                   )}
-                  {item.isMissing && <span className="absolute -top-2 -right-2 text-red-500">?</span>}
+                  {item.isMissing && (
+                    <span className="absolute -top-2 -right-2 text-red-500">
+                      ?
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {renderQuestionPrompt({ 
+        {renderQuestionPrompt({
           prompt: question.prompt,
         })}
 
         <div className="grid grid-cols-3 gap-3">
-          {question.options.map((option) => (
+          {question.options.map((option) =>
             renderOptionButton({
               option,
               isSelected: selectedAnswer === option.id,
@@ -138,8 +155,8 @@ export function SequencingActivity(props: ActivityTypeComponentProps): React.Rea
                   </div>
                 </div>
               ),
-            })
-          ))}
+            }),
+          )}
         </div>
 
         {showFeedback && renderFeedback({ isCorrect })}
