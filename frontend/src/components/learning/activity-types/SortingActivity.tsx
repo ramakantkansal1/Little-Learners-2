@@ -3,6 +3,7 @@ import {
   renderActivityHeader,
   renderProgress,
   renderQuestionPrompt,
+  renderOptionButton,
   renderFeedback,
   renderNavigation,
   renderCompletionScreen,
@@ -53,10 +54,11 @@ export function SortingActivity(
 
   if (completed) {
     const percentage =
-      activity.questions.length > 0
+      props.finalScore ??
+      (activity.questions.length > 0
         ? Math.round((score / activity.questions.length) * 100)
-        : 0;
-    const earnedStar = percentage >= 80;
+        : 0);
+    const earnedStar = props.rewardsEnabled !== false;
     return renderCompletionScreen({
       activity,
       score,
@@ -79,8 +81,6 @@ export function SortingActivity(
     activity.questions[0]?.question_type.replace("_", " ") || "Sorting";
 
   // Get categories from configuration
-  const categories = question.configuration?.categories as
-    Array<{ name: string; emoji?: string; color?: string }> | undefined;
   const itemsToSort = question.configuration?.items as
     Array<{ name: string; emoji?: string; category: string }> | undefined;
 
@@ -122,58 +122,26 @@ export function SortingActivity(
           )}
         </div>
 
-        {categories && categories.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            {categories.map((category, idx) => (
-              <div
-                key={idx}
-                className={`p-4 rounded-xl border-2 text-center transition-all cursor-pointer ${
-                  selectedAnswer === idx
-                    ? "border-primary-500 bg-primary-50 ring-2 ring-primary-500"
-                    : showFeedback && correctOptionIds.includes(idx)
-                      ? "border-green-500 bg-green-50"
-                      : selectedAnswer === idx &&
-                          showFeedback &&
-                          !correctOptionIds.includes(idx)
-                        ? "border-red-500 bg-red-50"
-                        : "border-gray-200 hover:border-primary-300 hover:bg-primary-50"
-                }`}
-                onClick={() => !showFeedback && !submitting && onAnswer(idx)}
-              >
-                <div className="flex flex-col items-center gap-2">
-                  {category.emoji && (
-                    <span className="text-4xl">{category.emoji}</span>
-                  )}
-                  <div
-                    className="w-12 h-12 rounded-lg mx-auto"
-                    style={{ backgroundColor: category.color || "#f0f0f0" }}
-                  />
-                  <p className="font-medium text-gray-900">{category.name}</p>
-                </div>
-                {showFeedback && correctOptionIds.includes(idx) && (
-                  <svg
-                    className="w-6 h-6 text-green-500 mx-auto"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
         {renderQuestionPrompt({
           prompt: question.prompt,
         })}
 
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {question.options.map((option) =>
+            renderOptionButton({
+              option,
+              isSelected: selectedAnswer === option.id,
+              isCorrect: correctOptionIds.includes(option.id),
+              showFeedback,
+              correctOptionIds,
+              onClick: () => onAnswer(option.id),
+              disabled: showFeedback || submitting,
+              renderOptionContent: () => (
+                <span className="text-xl">{option.text}</span>
+              ),
+            }),
+          )}
+        </div>
         {showFeedback && renderFeedback({ isCorrect })}
       </div>
 

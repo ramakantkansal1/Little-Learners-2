@@ -1,3 +1,4 @@
+import TracePad from "../TracePad";
 import { ActivityTypeComponentProps } from "../ActivityRenderer";
 import {
   renderActivityHeader,
@@ -16,8 +17,7 @@ import {
  * Used for: tracing
  *
  * Shows a shape/letter/number to trace.
- * In this simplified version, we show the tracing path and ask to identify it.
- * Full canvas-based tracing would be a separate implementation.
+ * Drawing stays on the device; only the exploration outcome is saved.
  */
 export function TracingActivity(
   props: ActivityTypeComponentProps,
@@ -55,10 +55,11 @@ export function TracingActivity(
 
   if (completed) {
     const percentage =
-      activity.questions.length > 0
+      props.finalScore ??
+      (activity.questions.length > 0
         ? Math.round((score / activity.questions.length) * 100)
-        : 0;
-    const earnedStar = percentage >= 80;
+        : 0);
+    const earnedStar = props.rewardsEnabled !== false;
     return renderCompletionScreen({
       activity,
       score,
@@ -84,9 +85,6 @@ export function TracingActivity(
   const traceType = question.configuration?.traceType as
     "letter" | "number" | "shape" | "line" | undefined;
   const traceTarget = question.configuration?.traceTarget as string | undefined;
-  const traceSvg = question.configuration?.traceSvg as string | undefined;
-  const traceSteps = question.configuration?.traceSteps as
-    Array<{ x: number; y: number }> | undefined;
 
   return (
     <div className="space-y-6">
@@ -106,39 +104,16 @@ export function TracingActivity(
             Trace the shape:
           </div>
 
-          <div className="flex justify-center mb-4">
-            <div className="w-48 h-48 rounded-xl bg-gray-50 border-2 border-gray-200 relative overflow-hidden">
-              {traceSvg && (
-                <div
-                  className="w-full h-full"
-                  dangerouslySetInnerHTML={{ __html: traceSvg }}
-                />
-              )}
-              {!traceSvg && traceTarget && (
-                <div className="w-full h-full flex items-center justify-center">
-                  <span className="text-8xl font-light text-gray-300 select-none">
-                    {traceTarget}
-                  </span>
-                </div>
-              )}
-
-              {/* Tracing guide dots */}
-              {traceSteps &&
-                traceSteps.map((step, idx) => (
-                  <div
-                    key={idx}
-                    className="absolute w-3 h-3 rounded-full bg-primary-500 border-2 border-white opacity-70 pointer-events-none"
-                    style={{
-                      left: `${step.x}%`,
-                      top: `${step.y}%`,
-                      transform: "translate(-50%, -50%)",
-                      transition: "opacity 0.3s",
-                      zIndex: 10,
-                    }}
-                  />
-                ))}
-            </div>
-          </div>
+          <TracePad
+            key={question.id}
+            target={traceTarget || "○"}
+            disabled={showFeedback || submitting}
+            onDone={
+              question.question_type === "exploration"
+                ? props.onExplore
+                : undefined
+            }
+          />
 
           <p className="text-sm text-gray-500">
             {traceType === "letter"

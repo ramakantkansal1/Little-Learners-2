@@ -1,0 +1,57 @@
+Happy Little Learners
+Dashboard
+My Children
+Progress Reports
+Notifications
+Settings
+
+codex_webflow_1793776811457@example.com
+
+Parent Account
+
+Dashboard
+3
+Welcome back, Parent!
+
+Here's how your little learners are doing
+
+Add Child
+
+Total Children
+
+0
+
+Lessons This Week
+
+0
+
+Time Learning
+
+0 min
+
+Rewards Earned
+
+0
+
+Your Children
+No children added yet
+
+Add your first child to start their learning journey
+
+Add Child
+Quick Actions
+Rewards
+
+Add a child to view rewards
+
+Settings
+
+Preferences & account
+
+Recent Activity
+
+No recent activity yet. Start learning to see progress!
+
+Weekly Learning Goal
+
+Add a child to start tracking weekly goals

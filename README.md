@@ -281,3 +281,32 @@ This is a private project. Please refer to internal contribution guidelines.
 ## 📞 Support
 
 For technical issues, please check the documentation or contact the development team.
+## Phase 6: activities, progress and rewards
+
+Phase 6 now has transactional activity execution, resume/retry, idempotent answer
+and completion handling, parent-controlled completion rewards, learning-time
+persistence, real parent reports and protected role routes. See the
+[Phase 6 completion report](docs/PHASE_6_COMPLETION_REPORT.md) for actual verification,
+known limits, API changes, migrations and manual acceptance steps.
+
+```sh
+# Preserve existing data; apply additive migrations and add the pilot curriculum.
+docker compose up -d
+docker compose exec backend alembic upgrade head
+docker compose exec backend python -m app.scripts.seed_phase6
+# Isolated browser-test stack (separate MySQL schema and frontend).
+docker compose exec backend-e2e alembic upgrade head
+docker compose exec backend-e2e python -m app.scripts.seed_phase6
+docker compose --profile e2e up -d frontend-e2e
+cd frontend
+npx playwright test -c playwright.phase6.config.ts
+```
+
+Development app: **http://localhost:5173**. Isolated E2E app:
+**http://localhost:5174**. Workbench MySQL ports are **3307** for development and
+**3308** for E2E. Browser tests create their own labelled accounts in E2E only.
+Use `backend/app/tests/` for backend tests (`cd backend && python -m pytest
+app/tests/ -q`); frontend npm commands run from `frontend/`, not the repository root.
+The pilot lessons demonstrate all 15 activity renderers and are a starting library,
+not a complete reviewed curriculum. Recorded media and full account settings remain
+later-phase work.

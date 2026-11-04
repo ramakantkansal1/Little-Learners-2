@@ -54,10 +54,11 @@ export function PictureComprehensionActivity(
 
   if (completed) {
     const percentage =
-      activity.questions.length > 0
+      props.finalScore ??
+      (activity.questions.length > 0
         ? Math.round((score / activity.questions.length) * 100)
-        : 0;
-    const earnedStar = percentage >= 80;
+        : 0);
+    const earnedStar = props.rewardsEnabled !== false;
     return renderCompletionScreen({
       activity,
       score,

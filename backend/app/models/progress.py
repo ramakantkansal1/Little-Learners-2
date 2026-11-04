@@ -193,6 +193,8 @@ class StudentRewardAward(Base, IDMixin, TimestampMixin):
     """Rewards earned by students."""
     __tablename__ = "student_reward_awards"
 
+    award_key: Mapped[str] = mapped_column(String(80), default="milestone", server_default="milestone", nullable=False)
+
     student_id: Mapped[int] = mapped_column(ForeignKey("student_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
     reward_id: Mapped[int] = mapped_column(ForeignKey("student_rewards.id", ondelete="CASCADE"), nullable=False, index=True)
     attempt_id: Mapped[Optional[int]] = mapped_column(ForeignKey("activity_attempts.id", ondelete="SET NULL"), nullable=True, index=True)
@@ -207,7 +209,7 @@ class StudentRewardAward(Base, IDMixin, TimestampMixin):
     # Constraints
     __table_args__ = (
         Index("ix_reward_award_student_earned", "student_id", "earned_at"),
-        UniqueConstraint("student_id", "reward_id", name="uq_student_reward_award_student_reward"),
+        UniqueConstraint("student_id", "reward_id", "award_key", name="uq_student_reward_award_scope"),
     )
 
     def __repr__(self) -> str:

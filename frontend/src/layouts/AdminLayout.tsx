@@ -24,6 +24,18 @@ export default function AdminLayout() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const navigation = [
+    {
+      name: "Structure & tasks",
+      href: "/admin/catalog",
+      icon: BookOpen,
+      roles: ["admin"],
+    },
+    {
+      name: "Child profiles",
+      href: "/admin/children",
+      icon: Users,
+      roles: ["admin"],
+    },
     { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
     {
       name: "User Management",

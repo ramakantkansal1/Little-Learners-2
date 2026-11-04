@@ -1,3 +1,4 @@
+import Narration from "@/components/learning/Narration";
 import { Link, useParams, useLocation, useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -57,6 +58,11 @@ export default function ActivityPage() {
   const [showFeedback, setShowFeedback] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
   const [score, setScore] = useState(0);
+  const [finalScore, setFinalScore] = useState<number | undefined>();
+  const [rewardsEnabled, setRewardsEnabled] = useState(true);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const elapsed = useRef(0);
+  const busy = useRef(false);
   const [completed, setCompleted] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -112,6 +118,13 @@ export default function ActivityPage() {
       }
 
       setAttemptId(attemptIdToUse);
+      elapsed.current = activityResponse.data.time_spent_seconds ?? 0;
+      setRewardsEnabled(activityResponse.data.rewards_enabled ?? true);
+      setCompleted(activityResponse.data.status === "completed");
+      setFinalScore(activityResponse.data.score ?? undefined);
+      setShowFeedback(false);
+      setSelectedAnswer(null);
+      setActionError(null);
 
       const activityData = activityResponse.data.activity;
       const responseData = activityResponse.data as {
@@ -119,6 +132,12 @@ export default function ActivityPage() {
           current_question_index?: number;
           selected_answer_id?: number;
           accumulated_score?: number;
+          correct_count?: number;
+          responses?: Array<{
+            question_id: number;
+            selected_option_ids: number[];
+            is_correct: boolean;
+          }>;
         };
         lesson_progress?: {
           completion_percentage?: number;
@@ -133,7 +152,19 @@ export default function ActivityPage() {
       if (savedProgress) {
         setCurrentQuestion(savedProgress.current_question_index ?? 0);
         setSelectedAnswer(savedProgress.selected_answer_id ?? null);
-        setScore(savedProgress.accumulated_score ?? 0);
+        setScore(
+          savedProgress.correct_count ?? savedProgress.accumulated_score ?? 0,
+        );
+        const q =
+          activityData.questions[savedProgress.current_question_index ?? 0];
+        const saved = savedProgress.responses?.find(
+          (r) => r.question_id === q?.id,
+        );
+        if (saved) {
+          setSelectedAnswer(saved.selected_option_ids[0] ?? null);
+          setIsCorrect(saved.is_correct);
+          setShowFeedback(true);
+        }
       }
 
       // Set lesson progress from backend
@@ -167,6 +198,7 @@ export default function ActivityPage() {
             text_audio_url: o.text_audio_url,
             image_url: o.image_url,
             display_order: o.display_order,
+            configuration: o.configuration,
           })),
         })),
       });
@@ -183,21 +215,67 @@ export default function ActivityPage() {
     loadActivityData();
   }, [activityId, attemptIdParam, loadActivityData]);
 
-  const handleAnswer = async (answerId: number) => {
+  useEffect(() => {
+    if (!attemptId || loading || completed) return;
+    let last = performance.now();
+    let lastInput = last;
+    const activity = () => {
+      lastInput = performance.now();
+    };
+    window.addEventListener("pointerdown", activity);
+    window.addEventListener("keydown", activity);
+    const timer = window.setInterval(() => {
+      const current = performance.now();
+      if (
+        document.visibilityState === "visible" &&
+        current - lastInput < 60000
+      ) {
+        elapsed.current = Math.min(
+          1800,
+          elapsed.current + (current - last) / 1000,
+        );
+      }
+      last = current;
+    }, 1000);
+    const save = window.setInterval(() => {
+      studentApi
+        .saveAttemptTime?.(attemptId, Math.floor(elapsed.current))
+        .catch(() => {});
+    }, 10000);
+    return () => {
+      clearInterval(timer);
+      clearInterval(save);
+      window.removeEventListener("pointerdown", activity);
+      window.removeEventListener("keydown", activity);
+    };
+  }, [attemptId, loading, completed]);
+
+  const handleAnswer = async (answerId: number, outcome?: "explored") => {
     if (showFeedback || submitting || !attemptId || !activity) return;
 
+    if (busy.current) return;
+    busy.current = true;
+    setActionError(null);
     setSubmitting(true);
     setSelectedAnswer(answerId);
 
     try {
       const question = activity.questions[currentQuestion];
-      const response = await studentApi.submitAnswer(attemptId, question.id, [
-        answerId,
-      ]);
+      const response = await studentApi.submitAnswer(
+        attemptId,
+        question.id,
+        answerId ? [answerId] : [],
+        Math.floor(elapsed.current),
+        outcome,
+      );
       const answerResult: AnswerSubmitResponse = response.data;
 
       setIsCorrect(answerResult.is_correct);
-      if (answerResult.is_correct) setScore((prev) => prev + 1);
+      setScore(
+        answerResult.saved_progress?.correct_count ??
+          answerResult.saved_progress?.accumulated_score ??
+          score + (answerResult.is_correct ? 1 : 0),
+      );
       setCorrectOptionIds(answerResult.correct_options);
       setShowFeedback(true);
 
@@ -214,7 +292,11 @@ export default function ActivityPage() {
       console.error("Failed to submit answer:", err);
       setShowFeedback(false);
       setSelectedAnswer(null);
+      setActionError(
+        "Your answer could not be saved. Check your connection and try again.",
+      );
     } finally {
+      busy.current = false;
       setSubmitting(false);
     }
   };
@@ -234,15 +316,27 @@ export default function ActivityPage() {
   };
 
   const completeAttemptAndFetchRecommendation = async () => {
-    if (!attemptId || !activity) return;
-
+    if (!attemptId || !activity || busy.current) return;
+    busy.current = true;
+    setActionError(null);
     try {
       setSubmitting(true);
       setRecommendationError(null);
 
       // Complete the attempt
-      const completeResponse = await studentApi.completeAttempt(attemptId);
+      const completeResponse = await studentApi.completeAttempt(
+        attemptId,
+        Math.floor(elapsed.current),
+      );
       const completeData: AttemptCompleteResponse = completeResponse.data;
+      setFinalScore(completeData.score);
+      setScore(completeData.correct_count ?? score);
+      setRewardsEnabled(completeData.rewards_enabled ?? true);
+      if (completeData.lesson_progress)
+        setLessonProgress({
+          ...completeData.lesson_progress,
+          last_activity_at: null,
+        });
 
       // Fetch the next activity recommendation
       setRecommendationLoading(true);
@@ -267,9 +361,12 @@ export default function ActivityPage() {
     } catch (err) {
       console.error("Failed to complete attempt:", err);
       setRecommendationError("Failed to complete activity. Please try again.");
-      // Still allow viewing completion screen locally
-      setCompleted(true);
+      setActionError(
+        "Completion was not saved. Check your connection, then press Finish again.",
+      );
+      setCompleted(false);
     } finally {
+      busy.current = false;
       setSubmitting(false);
     }
   };
@@ -327,37 +424,6 @@ export default function ActivityPage() {
         `/student/activity/${activity.id}?attempt=${response.data.attempt_id}`,
         { replace: true },
       );
-
-      const activityResponse = await studentApi.startActivityAttempt(
-        activity.id,
-      );
-      const activityData = activityResponse.data.activity;
-
-      setActivity({
-        id: activityData.id,
-        type: activityData.type as ActivityType,
-        code: activityData.code,
-        title: activityData.title,
-        instructions: activityData.instructions,
-        estimated_duration_minutes: activityData.estimated_duration_minutes,
-        configuration: activityData.configuration,
-        questions: activityData.questions.map((q) => ({
-          id: q.id,
-          question_type: q.question_type,
-          prompt: q.prompt,
-          prompt_audio_url: q.prompt_audio_url,
-          display_order: q.display_order,
-          points: q.points,
-          configuration: q.configuration,
-          options: q.options.map((o) => ({
-            id: o.id,
-            text: o.text,
-            text_audio_url: o.text_audio_url,
-            image_url: o.image_url,
-            display_order: o.display_order,
-          })),
-        })),
-      });
 
       setCurrentQuestion(0);
       setSelectedAnswer(null);
@@ -458,6 +524,9 @@ export default function ActivityPage() {
     correctOptionIds,
     score,
     completed,
+    finalScore,
+    rewardsEnabled,
+    onExplore: () => handleAnswer(0, "explored"),
     onAnswer: handleAnswer,
     onNext: handleNext,
     onPrevious: handlePrevious,
@@ -479,7 +548,26 @@ export default function ActivityPage() {
   // Render the activity type component via the ActivityRenderer dispatcher
   return (
     <>
+      {actionError && (
+        <p role="alert" className="p-4 mb-4 bg-red-50 rounded-xl">
+          {actionError}
+        </p>
+      )}
       {progressDisplay}
+      {!completed && (
+        <Narration
+          key={currentQuestion}
+          text={[
+            activity.instructions,
+            activity.questions[currentQuestion]?.configuration?.storyText,
+            activity.questions[currentQuestion]?.prompt,
+          ]
+            .filter(Boolean)
+            .join(". ")}
+          url={activity.questions[currentQuestion]?.prompt_audio_url}
+          enabled={audioEnabled}
+        />
+      )}
       <ActivityRenderer {...activityProps} />
     </>
   );

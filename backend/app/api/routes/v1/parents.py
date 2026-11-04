@@ -34,6 +34,7 @@ class ChildCreateRequest(BaseModel):
 
 
 class ChildUpdateRequest(BaseModel):
+    rewards_enabled: Optional[bool] = None
     display_name: Optional[str] = Field(None, min_length=1, max_length=100)
     date_of_birth: Optional[str] = None
     gender: Optional[str] = None
@@ -45,6 +46,7 @@ class ChildUpdateRequest(BaseModel):
 
 
 class ChildResponse(BaseModel):
+    rewards_enabled: bool = True
     id: int
     display_name: str
     date_of_birth: Optional[str]
@@ -80,6 +82,9 @@ class ParentProfileResponse(BaseModel):
 
 
 class ChildProgressResponse(BaseModel):
+    rewards_enabled: bool = True
+    total_time_spent_seconds: int = 0
+    subjects: List[dict] = Field(default_factory=list)
     child_id: int
     child_name: str
     stage_code: str
@@ -156,11 +161,10 @@ async def calculate_child_progress(student: StudentProfile, db: AsyncSession) ->
     # Total published lessons in stage
     total_result = await db.execute(
         select(func.count(Lesson.id))
-        .where(Lesson.topic.has(
-            select(Topic.subject_id).where(Subject.stage_id == student.current_stage_id).exists()
-        ))
-        .where(Lesson.status == "published")
-        .where(Lesson.is_active == True)
+        .join(Topic, Lesson.topic_id == Topic.id)
+        .join(Subject, Topic.subject_id == Subject.id)
+        .where(Subject.stage_id == student.current_stage_id,
+               Lesson.status == "published", Lesson.is_active.is_(True))
     )
     total_lessons = int(total_result.scalar() or 0)
 
@@ -179,7 +183,6 @@ async def calculate_child_progress(student: StudentProfile, db: AsyncSession) ->
     if total_lessons > 0:
         progress = (completed / total_lessons) * 100
         result = int(progress)
-        print(f"DEBUG: calculate_child_progress: completed={completed}, total_lessons={total_lessons}, progress={progress}, result={result}, type={type(result)}")
         return result
     return 0
 
@@ -422,6 +425,7 @@ async def create_child(
         progress_percentage=0,
         last_activity_at=student.last_activity_at.isoformat() if student.last_activity_at else None,
         username=student.username,
+        rewards_enabled=student.rewards_enabled,
     )
 
 
@@ -455,7 +459,7 @@ async def get_child(
     if not student or student.is_deleted:
         raise NotFoundException("Child not found")
 
-    progress = calculate_child_progress(student, db)
+    progress = await calculate_child_progress(student, db)
     stage = student.current_stage
 
     return ChildResponse(
@@ -475,6 +479,7 @@ async def get_child(
         progress_percentage=progress,
         last_activity_at=student.last_activity_at.isoformat() if student.last_activity_at else None,
         username=student.username,
+        rewards_enabled=student.rewards_enabled,
     )
 
 
@@ -541,6 +546,8 @@ async def update_child(
         student.preferred_language = request.preferred_language
     if request.is_active is not None:
         student.is_active = request.is_active
+    if request.rewards_enabled is not None:
+        student.rewards_enabled = request.rewards_enabled
     if request.pin is not None:
         from app.core.security import get_password_hash
         student.pin_hash = get_password_hash(request.pin)
@@ -569,6 +576,7 @@ async def update_child(
         progress_percentage=progress,
         last_activity_at=student.last_activity_at.isoformat() if student.last_activity_at else None,
         username=student.username,
+        rewards_enabled=student.rewards_enabled,
     )
 
 
@@ -727,18 +735,32 @@ async def get_child_progress(
     )
     recent = recent_result.all()
 
-    recent_activity = [
-        {
-            "lesson": r.Lesson.title if hasattr(r.Lesson, 'title') else "Unknown",
-            "activity": r.Activity.title if hasattr(r.Activity, 'title') else "Unknown",
-            "completed_at": r.ActivityAttempt.completed_at.isoformat() if r.ActivityAttempt.completed_at else None,
-            "score": r.ActivityAttempt.score,
-            "time_spent": r.ActivityAttempt.time_spent_seconds,
-        }
-        for r in recent
-    ]
+    from app.models import LessonTranslation, ActivityTranslation
+    from app.services.activity_attempts import title_for
+    recent_activity = []
+    for attempt, lesson, activity in recent:
+        recent_activity.append({
+            "lesson": await title_for(db, LessonTranslation, LessonTranslation.lesson_id, lesson, student.preferred_language),
+            "activity": await title_for(db, ActivityTranslation, ActivityTranslation.activity_id, activity, student.preferred_language),
+            "completed_at": attempt.completed_at.isoformat() if attempt.completed_at else None,
+            "score": attempt.score, "time_spent": attempt.time_spent_seconds,
+        })
+    subject_rows = (await db.execute(select(Subject.id, Subject.name, Lesson.id, StudentLessonProgress.status)
+        .join(Topic, Topic.subject_id == Subject.id).join(Lesson, Lesson.topic_id == Topic.id)
+        .outerjoin(StudentLessonProgress, (StudentLessonProgress.lesson_id == Lesson.id) &
+                   (StudentLessonProgress.student_id == child_id))
+        .where(Subject.stage_id == student.current_stage_id, Lesson.status == 'published',
+               Lesson.is_active.is_(True)))).all()
+    subjects = {}
+    for subject_id, name, lesson_id, lesson_status in subject_rows:
+        item = subjects.setdefault(subject_id, {"name": name, "total_lessons": 0, "completed_lessons": 0})
+        item['total_lessons'] += 1
+        item['completed_lessons'] += int(lesson_status == 'completed')
 
     return ChildProgressResponse(
+        rewards_enabled=student.rewards_enabled,
+        subjects=list(subjects.values()),
+        total_time_spent_seconds=total_time,
         child_id=student.id,
         child_name=student.display_name,
         stage_code=stage.code if stage else "",
@@ -749,7 +771,7 @@ async def get_child_progress(
         total_activities=total_activities,
         completed_activities=completed_activities,
         total_time_spent_minutes=total_time // 60,
-        average_score=round(avg_score, 1) if avg_score else None,
+        average_score=round(avg_score, 1) if avg_score is not None else None,
         rewards_earned=rewards_earned,
         recent_activity=recent_activity,
     )
@@ -802,7 +824,7 @@ async def get_child_rewards(
             .where(StudentRewardAward.student_id == student.id)
             .where(StudentRewardAward.reward_id == reward.id)
         )
-        award = award_result.scalar_one_or_none()
+        award = award_result.scalars().first()
 
         result.append({
             "id": reward.id,
@@ -1016,7 +1038,7 @@ async def get_child_analytics(
             .where(StudentRewardAward.student_id == student.id)
             .where(StudentRewardAward.reward_id == reward.id)
         )
-        award = award_result.scalar_one_or_none()
+        award = award_result.scalars().first()
         earned = award is not None
         if earned:
             rewards_earned_count += 1
@@ -1043,7 +1065,7 @@ async def get_child_analytics(
         total_activities=total_activities,
         completed_activities=completed_activities,
         total_time_spent_minutes=int(total_time // 60),
-        average_score=round(avg_score, 1) if avg_score else None,
+        average_score=round(avg_score, 1) if avg_score is not None else None,
         current_streak=current_streak,
         longest_streak=longest_streak,
         last_activity_at=last_activity_at,

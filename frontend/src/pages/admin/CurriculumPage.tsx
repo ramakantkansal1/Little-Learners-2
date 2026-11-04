@@ -1,3 +1,4 @@
+import { api } from "@services/api";
 import {
   Plus,
   BookOpen,
@@ -275,35 +276,16 @@ export default function CurriculumPage() {
     try {
       // Fetch subjects
       setLoading((prev) => ({ ...prev, subjects: true }));
-      const subjectsData = await curriculumApi.getSubjects({
-        active_only: true,
-      });
-      // Enrich with stage info
-      const enrichedSubjects = await Promise.all(
-        subjectsData.data.map(async (subject) => {
-          const stage = stages.find((s) => s.id === subject.stage_id);
-          const domain = stage?.domains?.find(
-            (d) => d.id === subject.domain_id,
-          );
-          // Count topics and lessons for this subject
-          const topicsData = await curriculumApi.getTopics({
-            subject_id: subject.id,
-            active_only: true,
-          });
-          const lessonsData = await adminApi.getLessons({
-            subject_id: subject.id,
-            limit: 100,
-          });
-          return {
-            ...subject,
-            stage_name: stage?.name || "Unknown",
-            domain_name: domain?.name || "Unknown",
-            topics: topicsData.data.length,
-            lessons: lessonsData.data.length,
-          };
-        }),
+      const subjectsData = await adminApi.getSubjects({ limit: 100 });
+      setSubjects(
+        subjectsData.data.map((subject) => ({
+          ...subject,
+          stage_name: subject.stage_name || "",
+          domain_name: subject.domain_name || "",
+          topics: subject.topics_count || 0,
+          lessons: subject.lessons_count || 0,
+        })),
       );
-      setSubjects(enrichedSubjects);
       setLoading((prev) => ({ ...prev, subjects: false }));
     } catch (err) {
       console.error("Failed to fetch subjects:", err);
@@ -331,7 +313,7 @@ export default function CurriculumPage() {
       console.error("Failed to fetch activities:", err);
       setLoading((prev) => ({ ...prev, activities: false }));
     }
-  }, [stages]);
+  }, []);
 
   useEffect(() => {
     fetchAll();
@@ -1083,6 +1065,29 @@ export default function CurriculumPage() {
             )}
           </div>
 
+          {(activeTab === "lessons" || activeTab === "activities") && (
+            <button
+              type="button"
+              className="btn btn-secondary mb-4"
+              onClick={async () => {
+                if (activeTab === "lessons") {
+                  const r = await adminApi.getLessons({
+                    limit: 100,
+                    offset: lessons.length,
+                  });
+                  setLessons((previous) => [...previous, ...r.data]);
+                } else {
+                  const r = await adminApi.getActivities({
+                    limit: 100,
+                    offset: activities.length,
+                  });
+                  setActivities((previous) => [...previous, ...r.data]);
+                }
+              }}
+            >
+              Load more content
+            </button>
+          )}
           {/* Stages Tab */}
           {activeTab === "stages" && (
             <div>
@@ -1131,6 +1136,7 @@ export default function CurriculumPage() {
                           className="btn btn-ghost btn-sm text-red-600 hover:bg-red-50 flex-1 justify-center"
                         >
                           <Trash2 className="w-4 h-4" />
+                          <span className="sr-only">Delete</span>
                         </button>
                       </div>
                     </div>
@@ -1216,6 +1222,7 @@ export default function CurriculumPage() {
                                 className="btn btn-ghost btn-sm"
                               >
                                 <Edit className="w-4 h-4" />
+                                <span className="sr-only">Edit</span>
                               </button>
                               <button
                                 onClick={() =>
@@ -1224,6 +1231,7 @@ export default function CurriculumPage() {
                                 className="btn btn-ghost btn-sm text-red-600 hover:bg-red-50"
                               >
                                 <Trash2 className="w-4 h-4" />
+                                <span className="sr-only">Delete</span>
                               </button>
                             </div>
                           </td>
@@ -1329,12 +1337,14 @@ export default function CurriculumPage() {
                                 title="View activities"
                               >
                                 <Eye className="w-4 h-4" />
+                                <span className="sr-only">Preview</span>
                               </button>
                               <button
                                 onClick={() => startEdit("lessons", lesson)}
                                 className="btn btn-ghost btn-sm"
                               >
                                 <Edit className="w-4 h-4" />
+                                <span className="sr-only">Edit</span>
                               </button>
                               {lesson.status === "draft" && (
                                 <button
@@ -1363,6 +1373,7 @@ export default function CurriculumPage() {
                                   title="Archive"
                                 >
                                   <Archive className="w-4 h-4" />
+                                  <span className="sr-only">Archive</span>
                                 </button>
                               )}
                               <button
@@ -1372,6 +1383,7 @@ export default function CurriculumPage() {
                                 className="btn btn-ghost btn-sm text-red-600 hover:bg-red-50"
                               >
                                 <Trash2 className="w-4 h-4" />
+                                <span className="sr-only">Delete</span>
                               </button>
                             </div>
                           </td>
@@ -1427,7 +1439,11 @@ export default function CurriculumPage() {
                                       onClick={() => openPreview(activity)}
                                       className="btn btn-ghost btn-sm"
                                     >
-                                      <Eye className="w-4 h-4" /> Preview
+                                      <Eye className="w-4 h-4" />
+                                      <span className="sr-only">
+                                        Preview
+                                      </span>{" "}
+                                      Preview
                                     </button>
                                     <button
                                       onClick={() =>
@@ -1436,6 +1452,7 @@ export default function CurriculumPage() {
                                       className="btn btn-ghost btn-sm"
                                     >
                                       <Edit className="w-4 h-4" />
+                                      <span className="sr-only">Edit</span>
                                     </button>
                                   </div>
                                 </div>
@@ -1526,6 +1543,7 @@ export default function CurriculumPage() {
                                 className="btn btn-ghost btn-sm"
                               >
                                 <Eye className="w-4 h-4" />
+                                <span className="sr-only">Preview</span>
                               </button>
                               <button
                                 onClick={() =>
@@ -1534,6 +1552,7 @@ export default function CurriculumPage() {
                                 className="btn btn-ghost btn-sm"
                               >
                                 <Edit className="w-4 h-4" />
+                                <span className="sr-only">Edit</span>
                               </button>
                               <button
                                 onClick={() =>
@@ -1542,6 +1561,7 @@ export default function CurriculumPage() {
                                 className="btn btn-ghost btn-sm text-red-600 hover:bg-red-50"
                               >
                                 <Trash2 className="w-4 h-4" />
+                                <span className="sr-only">Delete</span>
                               </button>
                             </div>
                           </td>
@@ -2960,107 +2980,56 @@ function ActivityPreview({
   activity: AdminActivity;
   onClose: () => void;
 }) {
-  const registryEntry = activityTypeRegistry.get(activity.type as ActivityType);
-  const Component = registryEntry?.component;
-
-  if (!Component) {
-    return (
-      <div className="card p-8 text-center">
-        <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4 text-4xl">
-          {registryEntry?.icon || "📝"}
-        </div>
-        <h3 className="text-xl font-display font-bold text-gray-900 mb-2">
-          Preview Not Available
-        </h3>
-        <p className="text-gray-600 mb-6">
-          Activity type "{activity.type}" is not yet supported for preview.
-        </p>
-        <button onClick={onClose} className="btn btn-primary">
-          Close
-        </button>
-      </div>
-    );
-  }
-
-  // Render the activity component in preview mode (read-only)
-  // We need to mock the props that the component expects
-  // For preview, we fetch the full activity data with questions
-  // For now, show a simplified preview
-
+  const [tasks, setTasks] = useState<Array<{
+    id: number;
+    prompt: string;
+    options: Array<{ id: number; text: string; is_correct: boolean }>;
+  }> | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    api
+      .get(`/admin/lessons/${activity.lesson_id}/preview`)
+      .then((r) => {
+        const found = r.data.activities.find(
+          (a: { id: number }) => a.id === activity.id,
+        );
+        if (active) setTasks(found?.questions || []);
+      })
+      .catch(() => {
+        if (active) setError("The preview could not be loaded.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [activity.id, activity.lesson_id]);
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <button onClick={onClose} className="btn btn-ghost">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="badge badge-primary">
-              {getRegistryEntry(activity.type as ActivityType)?.label ||
-                activity.type}
-            </span>
-          </div>
-          <h1 className="text-2xl font-display font-bold text-gray-900">
-            {activity.title}
-          </h1>
-        </div>
-      </div>
-
-      <div className="card p-6">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-sm text-gray-500">Question 1 of 3</p>
-          <p className="text-sm font-semibold text-gray-900">Score: 0</p>
-        </div>
-        <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-pastel-blue to-pastel-green rounded-full"
-            style={{ width: "33%" }}
-          />
-        </div>
-      </div>
-
-      <div className="card p-6">
-        <div className="text-center mb-6">
-          <p className="text-xl font-semibold text-gray-900">
-            Sample question prompt goes here
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3">
-          {["Option 1", "Option 2", "Option 3"].map((opt, i) => (
-            <button
-              key={i}
-              className="relative p-5 rounded-xl border-2 text-left border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-all"
-            >
-              <div className="flex items-center gap-4">
-                <span className="text-3xl">{opt}</span>
-                <div className="flex-1">
-                  <p className="font-medium text-gray-900">{opt}</p>
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <button className="btn btn-secondary" disabled>
-          <ArrowLeft className="w-5 h-5" />
-          Previous
-        </button>
-        <button className="btn btn-primary" disabled>
-          Next
-          <ArrowLeft className="w-5 h-5 rotate-180" />
-        </button>
-      </div>
-
-      <div className="mt-6 p-4 bg-blue-50 rounded-xl">
-        <p className="text-sm text-blue-700">
-          <strong>Preview Mode:</strong> This is a read-only preview. No student
-          attempts are created, no answers are recorded, and no rewards are
-          awarded.
-        </p>
-      </div>
-    </div>
+    <section className="space-y-5">
+      <h2 className="text-2xl font-bold">{activity.title}</h2>
+      <p>
+        Read-only preview of saved content. This creates no learning attempts or
+        rewards.
+      </p>
+      {error && <p role="alert">{error}</p>}
+      {!tasks && !error && <p role="status">Loading saved questions…</p>}
+      {tasks?.length === 0 && <p>No tasks have been added yet.</p>}
+      <ol>
+        {tasks?.map((q) => (
+          <li key={q.id} className="card p-5">
+            <h3 className="text-xl font-semibold">{q.prompt}</h3>
+            <ul>
+              {q.options.map((o) => (
+                <li key={o.id} className="p-3">
+                  {o.text} {o.is_correct && <span>✓ Correct answer</span>}
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ol>
+      <button className="btn btn-secondary" onClick={onClose}>
+        Close preview
+      </button>
+    </section>
   );
 }

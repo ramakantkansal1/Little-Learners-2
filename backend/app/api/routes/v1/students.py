@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, lazyload
 
 from app.core.database import get_db
 from app.core.exceptions import NotFoundException, ValidationException
@@ -115,6 +115,10 @@ class ActivityDetailResponse(BaseModel):
 
 
 class AttemptStartResponse(BaseModel):
+    status: str = "started"
+    score: Optional[int] = None
+    time_spent_seconds: int = 0
+    rewards_enabled: bool = True
     attempt_id: int
     activity: ActivityDetailResponse
     questions: List[dict]
@@ -122,12 +126,20 @@ class AttemptStartResponse(BaseModel):
     lesson_progress: Optional[dict] = None
 
 
-class AnswerSubmitRequest(BaseModel):
+class AttemptTimeRequest(BaseModel):
+    time_spent_seconds: int = Field(0, ge=0, le=1800)
+
+
+class AnswerSubmitRequest(AttemptTimeRequest):
     question_id: int
-    selected_option_ids: List[int]
+    selected_option_ids: List[int] = Field(default_factory=list, max_length=50)
+    outcome: Optional[str] = Field(None, pattern="^explored$")
 
 
 class AttemptCompleteResponse(BaseModel):
+    correct_count: int = 0
+    rewards_enabled: bool = True
+    lesson_progress: Optional[dict] = None
     score: int
     passed: bool
     rewards_earned: List[dict]
@@ -136,6 +148,7 @@ class AttemptCompleteResponse(BaseModel):
 
 
 class RewardResponse(BaseModel):
+    award_count: int = 0
     id: int
     code: str
     name: str
@@ -171,7 +184,7 @@ async def get_student_profile(db: AsyncSession, user_id: int) -> StudentProfile:
     result = await db.execute(
         select(StudentProfile)
         .where(StudentProfile.user_id == user_id)
-        .options(selectinload(StudentProfile.current_stage))
+        .options(lazyload("*"), selectinload(StudentProfile.current_stage).lazyload("*"))
     )
     student = result.scalar_one_or_none()
     if not student or student.is_deleted:
@@ -419,7 +432,7 @@ async def get_dashboard(
             .where(StudentRewardAward.student_id == student.id)
             .where(StudentRewardAward.reward_id == reward.id)
         )
-        earned = award_result.scalar_one_or_none() is not None
+        earned = award_result.scalars().first() is not None
         rewards_preview.append({
             "id": reward.id,
             "name": reward.name,
@@ -680,587 +693,44 @@ async def get_lesson_content(
 
 
 @router.post("/me/activities/{activity_id}/attempts", response_model=AttemptStartResponse)
-async def start_activity_attempt(
-    activity_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Start a new activity attempt."""
-    student = await get_student_profile(db, current_user.id)
-
-    from app.models import Activity, ActivityTranslation, Question, AnswerOption, ActivityAttempt, StudentLessonProgress
-
-    # Verify activity exists
-    activity_result = await db.execute(
-        select(Activity)
-        .where(Activity.id == activity_id)
-        .where(Activity.status == "published")
-        .where(Activity.is_active == True)
-    )
-    activity = activity_result.scalar_one_or_none()
-    if not activity:
-        raise NotFoundException("Activity not found")
-
-    # Get lesson progress
-    progress_result = await db.execute(
-        select(StudentLessonProgress)
-        .where(StudentLessonProgress.student_id == student.id)
-        .where(StudentLessonProgress.lesson_id == activity.lesson_id)
-    )
-    progress = progress_result.scalar_one_or_none()
-    if not progress:
-        progress = StudentLessonProgress(
-            student_id=student.id,
-            lesson_id=activity.lesson_id,
-            status="in_progress",
-            started_at=datetime.now(timezone.utc),
-            last_activity_at=datetime.now(timezone.utc),
-            current_activity_id=activity.id,
-        )
-        db.add(progress)
-        await db.flush()
-    elif progress.status == "not_started":
-        progress.status = "in_progress"
-        progress.started_at = datetime.now(timezone.utc)
-        progress.last_activity_at = datetime.now(timezone.utc)
-    progress.current_activity_id = activity.id
-
-    # Create attempt
-    attempt_count_result = await db.execute(
-        select(func.count(ActivityAttempt.id))
-        .where(ActivityAttempt.student_id == student.id)
-        .where(ActivityAttempt.activity_id == activity_id)
-    )
-    attempt_count = attempt_count_result.scalar() or 0
-
-    attempt = ActivityAttempt(
-        student_id=student.id,
-        activity_id=activity_id,
-        lesson_progress_id=progress.id,
-        attempt_number=attempt_count + 1,
-        status="started",
-        started_at=datetime.now(timezone.utc),
-    )
-    db.add(attempt)
-    await db.flush()
-    await db.commit()
-
-    # Get activity details with translations
-    act_trans_result = await db.execute(
-        select(ActivityTranslation).where(
-            ActivityTranslation.activity_id == activity_id,
-            ActivityTranslation.language == student.preferred_language
-        )
-    )
-    act_trans = act_trans_result.scalar_one_or_none()
-
-    # Get questions
-    questions_result = await db.execute(
-        select(Question)
-        .where(Question.activity_id == activity_id)
-        .where(Question.is_active == True)
-        .order_by(Question.display_order)
-    )
-    questions = questions_result.scalars().all()
-
-    questions_data = []
-    for q in questions:
-        options_result = await db.execute(
-            select(AnswerOption)
-            .where(AnswerOption.question_id == q.id)
-            .order_by(AnswerOption.display_order)
-        )
-        options = options_result.scalars().all()
-
-        questions_data.append({
-            "id": q.id,
-            "question_type": q.question_type,
-            "prompt": q.prompt,
-            "prompt_audio_url": q.prompt_audio_url,
-            "display_order": q.display_order,
-            "points": q.points,
-            "configuration": q.configuration,
-            "options": [
-                {
-                    "id": opt.id,
-                    "text": opt.text,
-                    "text_audio_url": opt.text_audio_url,
-                    "image_url": opt.image_url,
-                    "display_order": opt.display_order,
-                }
-                for opt in options
-            ],
-        })
-
-    activity_detail = ActivityDetailResponse(
-        id=activity.id,
-        code=activity.code,
-        type=activity.type.value,
-        title=act_trans.title if act_trans else activity.code,
-        instructions=act_trans.instructions if act_trans else activity.instructions,
-        estimated_duration_minutes=activity.estimated_duration_minutes,
-        configuration=activity.configuration,
-        questions=questions_data,
-    )
-
-    # Return progress info for frontend
-    saved_progress = None
-    if attempt.metadata_json:
-        saved_progress = {
-            "current_question_index": attempt.metadata_json.get("current_question_index", 0),
-            "accumulated_score": attempt.metadata_json.get("accumulated_score", 0),
-            "answers_submitted": attempt.metadata_json.get("answers_submitted", 0),
-        }
-
-    lesson_progress = None
-    if progress:
-        lesson_progress = {
-            "status": progress.status,
-            "completion_percentage": progress.completion_percentage,
-            "time_spent_seconds": progress.time_spent_seconds,
-        }
-
-    return AttemptStartResponse(
-        attempt_id=attempt.id,
-        activity=activity_detail,
-        questions=questions_data,
-        saved_progress=saved_progress,
-        lesson_progress=lesson_progress,
-    )
+async def start_activity_attempt(activity_id: int, db: AsyncSession = Depends(get_db),
+                                 current_user: User = Depends(get_current_user)):
+    from app.services.activity_attempts import start
+    return await start(db, current_user.id, activity_id)
 
 
 @router.get("/me/attempts/{attempt_id}", response_model=AttemptStartResponse)
-async def get_activity_attempt(
-    attempt_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Get existing activity attempt details."""
-    student = await get_student_profile(db, current_user.id)
-
-    from app.models import Activity, ActivityTranslation, Question, AnswerOption, ActivityAttempt, StudentLessonProgress
-
-    # Verify attempt belongs to student
-    attempt_result = await db.execute(
-        select(ActivityAttempt)
-        .where(ActivityAttempt.id == attempt_id)
-        .where(ActivityAttempt.student_id == student.id)
-    )
-    attempt = attempt_result.scalar_one_or_none()
-    if not attempt:
-        raise NotFoundException("Attempt not found")
-
-    # Get activity
-    activity_result = await db.execute(
-        select(Activity)
-        .where(Activity.id == attempt.activity_id)
-    )
-    activity = activity_result.scalar_one_or_none()
-    if not activity:
-        raise NotFoundException("Activity not found")
-
-    # Get lesson progress
-    progress_result = await db.execute(
-        select(StudentLessonProgress)
-        .where(StudentLessonProgress.student_id == student.id)
-        .where(StudentLessonProgress.lesson_id == activity.lesson_id)
-    )
-    progress = progress_result.scalar_one_or_none()
-    if not progress:
-        progress = StudentLessonProgress(
-            student_id=student.id,
-            lesson_id=activity.lesson_id,
-            status="in_progress",
-            started_at=datetime.now(timezone.utc),
-            last_activity_at=datetime.now(timezone.utc),
-            current_activity_id=activity.id,
-        )
-        db.add(progress)
-        await db.flush()
-    elif progress.status == "not_started":
-        progress.status = "in_progress"
-        progress.started_at = datetime.now(timezone.utc)
-        progress.last_activity_at = datetime.now(timezone.utc)
-    progress.current_activity_id = activity.id
-
-    # Get activity details with translations
-    act_trans_result = await db.execute(
-        select(ActivityTranslation).where(
-            ActivityTranslation.activity_id == activity.id,
-            ActivityTranslation.language == student.preferred_language
-        )
-    )
-    act_trans = act_trans_result.scalar_one_or_none()
-
-    # Get questions
-    questions_result = await db.execute(
-        select(Question)
-        .where(Question.activity_id == activity.id)
-        .where(Question.is_active == True)
-        .order_by(Question.display_order)
-    )
-    questions = questions_result.scalars().all()
-
-    questions_data = []
-    for q in questions:
-        options_result = await db.execute(
-            select(AnswerOption)
-            .where(AnswerOption.question_id == q.id)
-            .order_by(AnswerOption.display_order)
-        )
-        options = options_result.scalars().all()
-
-        questions_data.append({
-            "id": q.id,
-            "question_type": q.question_type,
-            "prompt": q.prompt,
-            "prompt_audio_url": q.prompt_audio_url,
-            "display_order": q.display_order,
-            "points": q.points,
-            "configuration": q.configuration,
-            "options": [
-                {
-                    "id": opt.id,
-                    "text": opt.text,
-                    "text_audio_url": opt.text_audio_url,
-                    "image_url": opt.image_url,
-                    "display_order": opt.display_order,
-                }
-                for opt in options
-            ],
-        })
-
-    activity_detail = ActivityDetailResponse(
-        id=activity.id,
-        code=activity.code,
-        type=activity.type.value,
-        title=act_trans.title if act_trans else activity.code,
-        instructions=act_trans.instructions if act_trans else activity.instructions,
-        estimated_duration_minutes=activity.estimated_duration_minutes,
-        configuration=activity.configuration,
-        questions=questions_data,
-    )
-
-    # Return progress info for frontend
-    saved_progress = None
-    if attempt.metadata_json:
-        saved_progress = {
-            "current_question_index": attempt.metadata_json.get("current_question_index", 0),
-            "accumulated_score": attempt.metadata_json.get("accumulated_score", 0),
-            "answers_submitted": attempt.metadata_json.get("answers_submitted", 0),
-        }
-
-    lesson_progress = None
-    if progress:
-        lesson_progress = {
-            "status": progress.status,
-            "completion_percentage": progress.completion_percentage,
-            "time_spent_seconds": progress.time_spent_seconds,
-        }
-
-    return AttemptStartResponse(
-        attempt_id=attempt.id,
-        activity=activity_detail,
-        questions=questions_data,
-        saved_progress=saved_progress,
-        lesson_progress=lesson_progress,
-    )
+async def get_activity_attempt(attempt_id: int, db: AsyncSession = Depends(get_db),
+                               current_user: User = Depends(get_current_user)):
+    from app.services.activity_attempts import student_for_update, owned_attempt, detail
+    student = await student_for_update(db, current_user.id)
+    attempt, activity = await owned_attempt(db, student, attempt_id)
+    return await detail(db, student, attempt, activity)
 
 
 @router.post("/attempts/{attempt_id}/responses")
-async def submit_answer(
-    attempt_id: int,
-    request: AnswerSubmitRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Submit answer for a question."""
-    student = await get_student_profile(db, current_user.id)
-
-    # Verify attempt belongs to student
-    attempt_result = await db.execute(
-        select(ActivityAttempt)
-        .where(ActivityAttempt.id == attempt_id)
-        .where(ActivityAttempt.student_id == student.id)
-    )
-    attempt = attempt_result.scalar_one_or_none()
-    if not attempt:
-        raise NotFoundException("Attempt not found")
-
-    if attempt.status != "started" and attempt.status != "in_progress":
-        raise ValidationException("Attempt already completed")
-
-    # Verify question belongs to activity
-    question_result = await db.execute(
-        select(Question)
-        .where(Question.id == request.question_id)
-        .where(Question.activity_id == attempt.activity_id)
-    )
-    question = question_result.scalar_one_or_none()
-    if not question:
-        raise NotFoundException("Question not found")
-
-    # Verify options
-    options_result = await db.execute(
-        select(AnswerOption)
-        .where(AnswerOption.id.in_(request.selected_option_ids))
-        .where(AnswerOption.question_id == request.question_id)
-    )
-    selected_options = options_result.scalars().all()
-
-    # Check correctness
-    correct_option_ids = {opt.id for opt in selected_options if opt.is_correct}
-    all_correct_ids = {opt.id for opt in selected_options if opt.is_correct}
-    is_correct = correct_option_ids == all_correct_ids and len(selected_options) > 0
-
-    points = question.points if is_correct else 0
-
-    # Check if response already exists (upsert behavior)
-    existing_response_result = await db.execute(
-        select(ActivityResponse)
-        .where(ActivityResponse.attempt_id == attempt_id)
-        .where(ActivityResponse.question_id == request.question_id)
-    )
-    existing_response = existing_response_result.scalar_one_or_none()
-
-    if existing_response:
-        # Update existing response
-        existing_response.selected_option_ids = request.selected_option_ids
-        existing_response.is_correct = is_correct
-        existing_response.points_earned = points
-        existing_response.time_spent_seconds = 0  # TODO: track time
-        response = existing_response
-    else:
-        # Record new response
-        response = ActivityResponse(
-            attempt_id=attempt_id,
-            question_id=request.question_id,
-            selected_option_ids=request.selected_option_ids,
-            is_correct=is_correct,
-            points_earned=points,
-            time_spent_seconds=0,  # TODO: track time
-        )
-        db.add(response)
-
-    # Update attempt status
-    attempt.status = "in_progress"
-
-    # Update attempt metadata to track progress (store in attempt.metadata_json)
-    if attempt.metadata_json is None:
-        attempt.metadata_json = {}
-    # current_question_index is 0-indexed (0 for first question)
-    # answers_submitted is 1-indexed (1 for first answer)
-    attempt.metadata_json["current_question_index"] = attempt.metadata_json.get("current_question_index", 0)
-    attempt.metadata_json["accumulated_score"] = attempt.metadata_json.get("accumulated_score", 0) + points
-    attempt.metadata_json["answers_submitted"] = attempt.metadata_json.get("answers_submitted", 0) + 1
-
-    await db.commit()
-
-    # Return progress info for frontend
-    saved_progress = None
-    if attempt.metadata_json:
-        saved_progress = {
-            "current_question_index": attempt.metadata_json.get("current_question_index", 0),
-            "accumulated_score": attempt.metadata_json.get("accumulated_score", 0),
-            "answers_submitted": attempt.metadata_json.get("answers_submitted", 0),
-        }
-
-    return {
-        "is_correct": is_correct,
-        "points_earned": points,
-        "correct_options": [opt.id for opt in selected_options if opt.is_correct],
-        "saved_progress": saved_progress,
-        "lesson_progress": None,  # Could add lesson progress here if needed
-    }
+async def submit_answer(attempt_id: int, request: AnswerSubmitRequest,
+                        db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from app.services.activity_attempts import answer
+    return await answer(db, current_user.id, attempt_id, request)
 
 
 @router.post("/attempts/{attempt_id}/complete", response_model=AttemptCompleteResponse)
-async def complete_activity_attempt(
-    attempt_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Complete activity attempt and calculate rewards."""
-    student = await get_student_profile(db, current_user.id)
+async def complete_activity_attempt(attempt_id: int, request: AttemptTimeRequest = AttemptTimeRequest(),
+                                    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from app.services.activity_attempts import complete
+    return await complete(db, current_user.id, attempt_id, request.time_spent_seconds)
 
-    from app.models import ActivityAttempt, ActivityResponse, StudentReward, StudentRewardAward, StudentLessonProgress, Activity
-    from sqlalchemy.orm import selectinload
 
-    attempt_result = await db.execute(
-        select(ActivityAttempt)
-        .options(selectinload(ActivityAttempt.activity))
-        .where(ActivityAttempt.id == attempt_id)
-        .where(ActivityAttempt.student_id == student.id)
-    )
-    attempt = attempt_result.scalar_one_or_none()
-    if not attempt:
-        raise NotFoundException("Attempt not found")
-
-    if attempt.status == "completed":
-        raise ValidationException("Attempt already completed")
-
-    # Get all responses
-    responses_result = await db.execute(
-        select(ActivityResponse)
-        .where(ActivityResponse.attempt_id == attempt_id)
-    )
-    responses = responses_result.scalars().all()
-
-    total_points = sum(r.points_earned for r in responses)
-    max_points = sum(q.points for q in (
-        await db.execute(select(Question).where(Question.activity_id == attempt.activity_id))
-    ).scalars().all())
-
-    score = int((total_points / max_points) * 100) if max_points > 0 else 0
-    passed = score >= 70  # 70% pass threshold
-
-    # Update attempt
-    attempt.status = "completed"
-    attempt.completed_at = datetime.now(timezone.utc)
-    attempt.score = score
-    attempt.max_score = max_points
-    attempt.passed = passed
-
-    # Update lesson progress
-    if attempt.lesson_progress_id:
-        progress_result = await db.execute(
-            select(StudentLessonProgress)
-            .where(StudentLessonProgress.id == attempt.lesson_progress_id)
-        )
-        progress = progress_result.scalar_one_or_none()
-        if progress:
-            # Calculate overall lesson progress
-            total_activities_result = await db.execute(
-                select(func.count(Activity.id))
-                .where(Activity.lesson_id == progress.lesson_id)
-                .where(Activity.status == "published")
-                .where(Activity.is_active == True)
-            )
-            total_activities = total_activities_result.scalar() or 1
-
-            completed_activities_result = await db.execute(
-                select(func.count(ActivityAttempt.id))
-                .where(ActivityAttempt.student_id == student.id)
-                .where(ActivityAttempt.activity.has(Activity.lesson_id == progress.lesson_id))
-                .where(ActivityAttempt.status == "completed")
-            )
-            completed_activities = completed_activities_result.scalar() or 0
-
-            progress.completion_percentage = int((completed_activities / total_activities) * 100)
-            if completed_activities >= total_activities:
-                progress.status = "completed"
-                progress.completed_at = datetime.now(timezone.utc)
-
-    # Award rewards
-    rewards_earned = []
-    if passed:
-        # Perfect score reward
-        if score == 100:
-            perfect_reward_result = await db.execute(
-                select(StudentReward).where(StudentReward.code == "perfect_score")
-            )
-            perfect_reward = perfect_reward_result.scalar_one_or_none()
-            if perfect_reward:
-                existing = await db.execute(
-                    select(StudentRewardAward)
-                    .where(StudentRewardAward.student_id == student.id)
-                    .where(StudentRewardAward.reward_id == perfect_reward.id)
-                )
-                if not existing.scalar_one_or_none():
-                    award = StudentRewardAward(
-                        student_id=student.id,
-                        reward_id=perfect_reward.id,
-                        attempt_id=attempt_id,
-                    )
-                    db.add(award)
-                    rewards_earned.append({
-                        "name": perfect_reward.name,
-                        "type": perfect_reward.reward_type,
-                        "image_url": perfect_reward.image_url,
-                    })
-
-    # First activity reward (only for passed attempts)
-    if passed:
-        first_activity_result = await db.execute(
-            select(func.count(ActivityAttempt.id))
-            .where(ActivityAttempt.student_id == student.id)
-            .where(ActivityAttempt.status == "completed")
-        )
-        if first_activity_result.scalar() == 1:
-            first_reward_result = await db.execute(
-                select(StudentReward).where(StudentReward.code == "first_star")
-            )
-            first_reward = first_reward_result.scalar_one_or_none()
-            if first_reward:
-                existing = await db.execute(
-                    select(StudentRewardAward)
-                    .where(StudentRewardAward.student_id == student.id)
-                    .where(StudentRewardAward.reward_id == first_reward.id)
-                )
-                if not existing.scalar_one_or_none():
-                    award = StudentRewardAward(
-                        student_id=student.id,
-                        reward_id=first_reward.id,
-                        attempt_id=attempt_id,
-                    )
-                    db.add(award)
-                    rewards_earned.append({
-                        "name": first_reward.name,
-                        "type": first_reward.reward_type,
-                        "image_url": first_reward.image_url,
-                    })
-
-    # Find next activity
-    next_activity_id = None
-    activity_result = await db.execute(
-        select(Activity)
-        .where(Activity.lesson_id == attempt.activity.lesson_id)
-        .where(Activity.status == "published")
-        .where(Activity.is_active == True)
-        .where(Activity.display_order > attempt.activity.display_order)
-        .order_by(Activity.display_order)
-        .limit(1)
-    )
-    next_activity = activity_result.scalar_one_or_none()
-    if next_activity:
-        next_activity_id = next_activity.id
-
-    # Update lesson progress with streak calculation
-    if attempt.lesson_progress_id:
-        progress_result = await db.execute(
-            select(StudentLessonProgress)
-            .where(StudentLessonProgress.id == attempt.lesson_progress_id)
-        )
-        progress = progress_result.scalar_one_or_none()
-        if progress:
-            # Calculate streak
-            current_streak, longest_streak = await calculate_streak(
-                db, student, datetime.now(timezone.utc).date()
-            )
-            progress.current_streak = current_streak
-            progress.longest_streak = longest_streak
-
-    # Calculate streak if passed
-    streak_info = None
-    if passed:
-        current_streak, longest_streak = await calculate_streak(
-            db, student, datetime.now(timezone.utc).date()
-        )
-        streak_info = {
-            "current_streak": current_streak,
-            "longest_streak": longest_streak,
-            "last_activity_date": datetime.now(timezone.utc).date().isoformat(),
-        }
-
-    await db.commit()
-
-    return AttemptCompleteResponse(
-        score=score,
-        passed=passed,
-        rewards_earned=rewards_earned,
-        next_activity_id=next_activity_id,
-        streak=streak_info,
-    )
+@router.patch("/attempts/{attempt_id}/time")
+async def save_attempt_time(attempt_id: int, request: AttemptTimeRequest,
+                            db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from app.services.activity_attempts import student_for_update, owned_attempt, record_time
+    student = await student_for_update(db, current_user.id)
+    attempt, _ = await owned_attempt(db, student, attempt_id)
+    if attempt.status != 'completed':
+        await record_time(db, attempt, request.time_spent_seconds)
+    return {"time_spent_seconds": attempt.time_spent_seconds}
 
 
 @router.get("/me/rewards", response_model=List[RewardResponse])
@@ -1275,7 +745,7 @@ async def get_my_rewards(
 
     rewards_result = await db.execute(
         select(StudentReward)
-        .where(StudentReward.is_active == True)
+        .where(StudentReward.is_active == True, StudentReward.code != "week_streak")
         .order_by(StudentReward.display_order)
     )
     rewards = rewards_result.scalars().all()
@@ -1287,9 +757,11 @@ async def get_my_rewards(
             .where(StudentRewardAward.student_id == student.id)
             .where(StudentRewardAward.reward_id == reward.id)
         )
-        award = award_result.scalar_one_or_none()
+        awards = award_result.scalars().all()
+        award = awards[0] if awards else None
 
         result.append(RewardResponse(
+            award_count=len(awards),
             id=reward.id,
             code=reward.code,
             name=reward.name,
@@ -1326,12 +798,14 @@ async def get_my_history(
 
     history = []
     for attempt, activity, lesson in result.all():
+        from app.models import LessonTranslation, ActivityTranslation
+        from app.services.activity_attempts import title_for
         history.append(HistoryItemResponse(
             id=attempt.id,
             lesson_id=lesson.id,
-            lesson_title=lesson.code,  # Would need translation
+            lesson_title=await title_for(db, LessonTranslation, LessonTranslation.lesson_id, lesson, student.preferred_language),
             activity_id=activity.id,
-            activity_title=activity.code,
+            activity_title=await title_for(db, ActivityTranslation, ActivityTranslation.activity_id, activity, student.preferred_language),
             status=attempt.status,
             score=attempt.score,
             completed_at=attempt.completed_at.isoformat() if attempt.completed_at else None,
@@ -1590,7 +1064,7 @@ async def get_student_profile(db: AsyncSession, user_id: int) -> StudentProfile:
     result = await db.execute(
         select(StudentProfile)
         .where(StudentProfile.user_id == user_id)
-        .options(selectinload(StudentProfile.current_stage))
+        .options(lazyload("*"), selectinload(StudentProfile.current_stage).lazyload("*"))
     )
     student = result.scalar_one_or_none()
     if not student or student.is_deleted:

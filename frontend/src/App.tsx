@@ -1,3 +1,6 @@
+import CatalogPage from "./pages/admin/CatalogPage";
+import { Children as AdminChildren } from "./pages/admin/LiveAdmin";
+import RequireRole from "./components/RequireRole";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 
@@ -123,7 +126,13 @@ function App() {
         </Route>
 
         {/* Parent Routes - Protected */}
-        <Route element={<ParentLayout />}>
+        <Route
+          element={
+            <RequireRole role="parent">
+              <ParentLayout />
+            </RequireRole>
+          }
+        >
           <Route path="/parent/dashboard" element={<ParentDashboardPage />} />
           <Route path="/parent/children" element={<ParentChildrenPage />} />
           <Route
@@ -148,9 +157,11 @@ function App() {
         {/* Student Routes - Protected */}
         <Route
           element={
-            <StudentProvider>
-              <StudentLayout />
-            </StudentProvider>
+            <RequireRole role="student">
+              <StudentProvider>
+                <StudentLayout />
+              </StudentProvider>
+            </RequireRole>
           }
         >
           <Route path="/student/dashboard" element={<StudentDashboardPage />} />
@@ -167,7 +178,15 @@ function App() {
         </Route>
 
         {/* Admin Routes - Protected */}
-        <Route element={<AdminLayout />}>
+        <Route
+          element={
+            <RequireRole role="admin">
+              <AdminLayout />
+            </RequireRole>
+          }
+        >
+          <Route path="/admin/catalog" element={<CatalogPage />} />
+          <Route path="/admin/children" element={<AdminChildren />} />
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
           <Route path="/admin/curriculum/*" element={<AdminCurriculumPage />} />

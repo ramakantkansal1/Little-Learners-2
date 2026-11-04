@@ -229,10 +229,8 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         # Debug logging
         import structlog
         logger = structlog.get_logger(__name__)
-        print(f"CSRF validation: path={request.url.path}, method={request.method}, has_header_token={bool(csrf_token)}, has_cookie_token={bool(expected_token)}, header_token={csrf_token[:10] if csrf_token else None}, cookie_token={expected_token[:10] if expected_token else None}, header_full={csrf_token}, cookie_full={expected_token}, tokens_match={csrf_token == expected_token if csrf_token and expected_token else None}")
 
         if not csrf_token or not expected_token or not verify_csrf_token(csrf_token, expected_token):
-            print(f"CSRF validation FAILED: path={request.url.path}, method={request.method}, csrf_token={csrf_token}, expected_token={expected_token}, match={csrf_token == expected_token if csrf_token and expected_token else None}")
             logger.warning(
                 "CSRF token validation failed",
                 path=request.url.path,

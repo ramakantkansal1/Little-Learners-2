@@ -791,7 +791,9 @@ describe("ActivityPage — Recommendation Integration", () => {
       // Completion screen should still be visible
       expect(screen.getByText("Great Job!")).toBeInTheDocument();
       expect(screen.getByText("100% Score")).toBeInTheDocument();
-      expect(screen.getByText("You earned a star!")).toBeInTheDocument();
+      expect(
+        screen.getByText("Your learning counts! Keep exploring."),
+      ).toBeInTheDocument();
     }, 60000);
 
     it("does not block completion when recommendation fails", async () => {
@@ -1088,7 +1090,9 @@ describe("ActivityPage — Recommendation Integration", () => {
           expect(
             screen.getByText("You got 2 out of 2 correct!"),
           ).toBeInTheDocument();
-          expect(screen.getByText("You earned a star!")).toBeInTheDocument();
+          expect(
+            screen.getByText("Your learning counts! Keep exploring."),
+          ).toBeInTheDocument();
         },
         { timeout: 20000 },
       );

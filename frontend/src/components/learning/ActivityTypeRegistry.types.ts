@@ -114,6 +114,9 @@ export interface ActivityTypeComponentProps {
   score: number;
   /** Whether activity is completed */
   completed: boolean;
+  finalScore?: number;
+  rewardsEnabled?: boolean;
+  onExplore?: () => void;
   /** Callback when an answer is selected */
   onAnswer: (answerId: number) => void;
   /** Callback to proceed to next question or finish */

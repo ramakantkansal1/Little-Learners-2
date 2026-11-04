@@ -1,0 +1,257 @@
+{
+  "results": [
+    {
+      "name": "Submit answer and persist through reload",
+      "status": "PASS"
+    },
+    {
+      "name": "Complete two-question activity",
+      "status": "PASS"
+    },
+    {
+      "name": "History records completed activity",
+      "status": "FAIL",
+      "error": "expect(locator).toContainText(expected) failed\n\nLocator: locator('main')\nExpected substring: \"Activity 1\"\nReceived string:    \"Learning JourneyTrack your daily learning adventuresCalendar ViewList ViewActive Days0/30Lessons Completed1Total Learning Time0mRewards Earned1Current Streak0 days 🔥Longest streak: 1 daysNovember 2026SunMonTueWedThuFriSat123456789101112131415161718192021222324252627282930Legend Learning Day Reward Earned Streak Day No Activity\"\nTimeout: 15000ms\n\nCall log:\n  - Expect \"toContainText\" locator('main') with timeout 15000ms\n  - waiting for locator('main')\n    2 × locator resolved to <main class=\"p-4 sm:p-6 lg:p-8 pb-20  \">…</main>\n      - unexpected value \"Loading your learning journey...\"\n    26 × locator resolved to <main class=\"p-4 sm:p-6 lg:p-8 pb-20  \">…</main>\n       - unexpected value \"Learning JourneyTrack your daily learning adventuresCalendar ViewList ViewActive Days0/30Lessons Completed1Total Learning Time0mRewards Earned1Current Streak0 days 🔥Longest streak: 1 daysNovember 2026SunMonTueWedThuFriSat123456789101112131415161718192021222324252627282930Legend Learning Day Reward Earned Streak Day No Activity\"\n"
+    },
+    {
+      "name": "Parent report shows persisted activity",
+      "status": "FAIL",
+      "error": "expect(locator).toBeVisible() failed\n\nLocator: getByText('Activity 1').first()\nExpected: visible\nTimeout: 15000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"toBeVisible\" getByText('Activity 1').first() with timeout 15000ms\n  - waiting for getByText('Activity 1').first()\n"
+    },
+    {
+      "name": "Mobile parent dashboard and menu",
+      "status": "PASS"
+    }
+  ],
+  "requests": [
+    {
+      "url": "http://localhost:5173/api/v1/students/me/activities/1/attempts",
+      "status": 200,
+      "body": {
+        "attempt_id": 145,
+        "activity": {
+          "id": 1,
+          "code": "activity_1",
+          "type": "image_selection",
+          "title": "Activity 1",
+          "instructions": "Choose the correct answer",
+          "estimated_duration_minutes": 5,
+          "configuration": {
+            "difficulty": "easy",
+            "difficulty_tier": 1
+          },
+          "questions": [
+            {
+              "id": 1,
+              "question_type": "single_choice",
+              "prompt": "Question 1 about Animal Sounds",
+              "prompt_audio_url": null,
+              "display_order": 1,
+              "points": 1,
+              "configuration": null,
+              "options": [
+                {
+                  "id": 1,
+                  "text": "Option 1",
+                  "text_audio_url": null,
+                  "image_url": null,
+                  "display_order": 1
+                },
+                {
+                  "id": 2,
+                  "text": "Option 2",
+                  "text_audio_url": null,
+                  "image_url": null,
+                  "display_order": 2
+                },
+                {
+                  "id": 3,
+                  "text": "Option 3",
+                  "text_audio_url": null,
+                  "image_url": null,
+                  "display_order": 3
+                }
+              ]
+            },
+            {
+              "id": 2,
+              "question_type": "single_choice",
+              "prompt": "Which one is Animal Sounds?",
+              "prompt_audio_url": null,
+              "display_order": 2,
+              "points": 1,
+              "configuration": null,
+              "options": [
+                {
+                  "id": 4,
+                  "text": "Option 1",
+                  "text_audio_url": null,
+                  "image_url": null,
+                  "display_order": 1
+                },
+                {
+                  "id": 5,
+                  "text": "Option 2",
+                  "text_audio_url": null,
+                  "image_url": null,
+                  "display_order": 2
+                },
+                {
+                  "id": 6,
+                  "text": "Option 3",
+                  "text_audio_url": null,
+                  "image_url": null,
+                  "display_order": 3
+                }
+              ]
+            }
+          ]
+        },
+        "questions": [
+          {
+            "id": 1,
+            "question_type": "single_choice",
+            "prompt": "Question 1 about Animal Sounds",
+            "prompt_audio_url": null,
+            "display_order": 1,
+            "points": 1,
+            "configuration": null,
+            "options": [
+              {
+                "id": 1,
+                "text": "Option 1",
+                "text_audio_url": null,
+                "image_url": null,
+                "display_order": 1
+              },
+              {
+                "id": 2,
+                "text": "Option 2",
+                "text_audio_url": null,
+                "image_url": null,
+                "display_order": 2
+              },
+              {
+                "id": 3,
+                "text": "Option 3",
+                "text_audio_url": null,
+                "image_url": null,
+                "display_order": 3
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "question_type": "single_choice",
+            "prompt": "Which one is Animal Sounds?",
+            "prompt_audio_url": null,
+            "display_order": 2,
+            "points": 1,
+            "configuration": null,
+            "options": [
+              {
+                "id": 4,
+                "text": "Option 1",
+                "text_audio_url": null,
+                "image_url": null,
+                "display_order": 1
+              },
+              {
+                "id": 5,
+                "text": "Option 2",
+                "text_audio_url": null,
+                "image_url": null,
+                "display_order": 2
+              },
+              {
+                "id": 6,
+                "text": "Option 3",
+                "text_audio_url": null,
+                "image_url": null,
+                "display_order": 3
+              }
+            ]
+          }
+        ],
+        "saved_progress": null,
+        "lesson_progress": {
+          "status": "in_progress",
+          "completion_percentage": 0,
+          "time_spent_seconds": 0
+        }
+      }
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/attempts/145/responses",
+      "status": 200,
+      "body": {
+        "is_correct": true,
+        "points_earned": 1,
+        "correct_options": [
+          1
+        ],
+        "saved_progress": {
+          "current_question_index": 0,
+          "accumulated_score": 1,
+          "answers_submitted": 1
+        },
+        "lesson_progress": null
+      }
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/attempts/145/responses",
+      "status": 200,
+      "body": {
+        "is_correct": true,
+        "points_earned": 1,
+        "correct_options": [
+          1
+        ],
+        "saved_progress": {
+          "current_question_index": 0,
+          "accumulated_score": 2,
+          "answers_submitted": 2
+        },
+        "lesson_progress": null
+      }
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/attempts/145/responses",
+      "status": 200,
+      "body": {
+        "is_correct": true,
+        "points_earned": 1,
+        "correct_options": [
+          4
+        ],
+        "saved_progress": {
+          "current_question_index": 0,
+          "accumulated_score": 2,
+          "answers_submitted": 2
+        },
+        "lesson_progress": null
+      }
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/attempts/145/complete",
+      "status": 200,
+      "body": {
+        "score": 100,
+        "passed": true,
+        "rewards_earned": [
+          {
+            "name": "Perfect Score",
+            "type": "sticker",
+            "image_url": null
+          }
+        ],
+        "next_activity_id": 2,
+        "streak": {
+          "current_streak": 1,
+          "longest_streak": 1,
+          "last_activity_date": "2026-11-04"
+        }
+      }
+    }
+  ]
+}

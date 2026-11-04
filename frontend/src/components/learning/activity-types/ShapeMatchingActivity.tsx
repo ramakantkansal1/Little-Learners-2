@@ -54,10 +54,11 @@ export function ShapeMatchingActivity(
 
   if (completed) {
     const percentage =
-      activity.questions.length > 0
+      props.finalScore ??
+      (activity.questions.length > 0
         ? Math.round((score / activity.questions.length) * 100)
-        : 0;
-    const earnedStar = percentage >= 80;
+        : 0);
+    const earnedStar = props.rewardsEnabled !== false;
     return renderCompletionScreen({
       activity,
       score,
@@ -84,9 +85,6 @@ export function ShapeMatchingActivity(
   const _targetShapeEmoji = question.configuration?.targetShapeEmoji as
     string | undefined;
   void _targetShapeEmoji;
-  const targetShapeSvg = question.configuration?.targetShapeSvg as
-    string | undefined;
-
   // Shape emoji mapping
   const shapeEmojis: Record<string, string> = {
     circle: "⭕",
@@ -99,15 +97,7 @@ export function ShapeMatchingActivity(
     oval: "⭕",
   };
 
-  const renderShape = (shape: string, size: number = 80) => {
-    if (targetShapeSvg) {
-      return (
-        <div
-          dangerouslySetInnerHTML={{ __html: targetShapeSvg }}
-          style={{ width: size, height: size }}
-        />
-      );
-    }
+  const renderShape = (shape: string, _size: number = 80) => {
     const emoji = shapeEmojis[shape.toLowerCase()] || "❓";
     return <span className="text-7xl">{emoji}</span>;
   };

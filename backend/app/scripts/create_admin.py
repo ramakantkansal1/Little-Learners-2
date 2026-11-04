@@ -19,8 +19,8 @@ from app.permissions.roles import Role as RoleEnum
 
 
 async def create_admin_user(
-    email: str = "admin@happylittlelearners.in",
-    password: str = "Admin@123",
+    email: str,
+    password: str,
     full_name: str = "System Administrator",
 ) -> User:
     """Create the initial admin user."""
@@ -99,10 +99,17 @@ async def create_admin_user(
 async def main():
     """Main function."""
     print("Creating admin user...")
-    print(f"Database: {settings.database_url}")
+    import argparse, getpass, os
+    parser = argparse.ArgumentParser(description="Bootstrap an administrator without default credentials")
+    parser.add_argument("--email", required=True)
+    parser.add_argument("--name", default="Administrator")
+    args = parser.parse_args()
+    password = os.environ.get("ADMIN_BOOTSTRAP_PASSWORD") or getpass.getpass("Administrator password: ")
+    if len(password) < 12:
+        raise ValueError("Use a password of at least 12 characters")
 
     try:
-        await create_admin_user()
+        await create_admin_user(args.email, password, args.name)
         print("Done!")
     except Exception as e:
         print(f"Error: {e}")

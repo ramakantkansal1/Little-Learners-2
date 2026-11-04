@@ -49,10 +49,13 @@ export default function RewardsPage() {
     return true;
   });
 
-  const earnedCount = rewards.filter((r) => r.earned).length;
+  const earnedCount = rewards.reduce(
+    (n, r) => n + (r.award_count ?? Number(r.earned)),
+    0,
+  );
   const totalPoints = rewards
     .filter((r) => r.earned)
-    .reduce((sum, r) => sum + (r.points_value || 0), 0);
+    .reduce((sum, r) => sum + (r.points_value || 0) * (r.award_count ?? 1), 0);
   const earnedBadges = rewards.filter(
     (r) => r.earned && r.reward_type === "badge",
   ).length;

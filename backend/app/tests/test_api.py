@@ -1791,7 +1791,7 @@ class TestActivityAttemptPersistence:
         assert submit_data["is_correct"] is True
         assert submit_data["points_earned"] == 10
         assert "saved_progress" in submit_data
-        assert submit_data["saved_progress"]["current_question_index"] == 0
+        assert submit_data["saved_progress"]["current_question_index"] == 1
         assert submit_data["saved_progress"]["accumulated_score"] == 10
         assert submit_data["saved_progress"]["answers_submitted"] == 1
 
@@ -1809,7 +1809,7 @@ class TestActivityAttemptPersistence:
             assert attempt.activity_id == activity_id
             assert attempt.status == "in_progress"
             assert attempt.metadata_json is not None
-            assert attempt.metadata_json["current_question_index"] == 0
+            assert attempt.metadata_json["current_question_index"] == 1
             assert attempt.metadata_json["accumulated_score"] == 10
         await check_engine.dispose()
 
@@ -1841,7 +1841,7 @@ class TestActivityAttemptPersistence:
         assert get_response.status_code == 200
         get_data = get_response.json()
         assert get_data["saved_progress"] is not None
-        assert get_data["saved_progress"]["current_question_index"] == 0
+        assert get_data["saved_progress"]["current_question_index"] == 1
         assert get_data["saved_progress"]["accumulated_score"] == 10
         assert get_data["saved_progress"]["answers_submitted"] == 1
 
@@ -2080,7 +2080,7 @@ class TestActivityAttemptPersistence:
         await check_engine.dispose()
 
     @pytest.mark.asyncio
-    async def test_duplicate_completion_rejected_after_first(self, attempt_scenario, test_db_url):
+    async def test_duplicate_completion_replays_saved_result(self, attempt_scenario, test_db_url):
         """A second completion of the same attempt is rejected with 422."""
         ctx = attempt_scenario
         client = ctx["client"]
@@ -2122,10 +2122,11 @@ class TestActivityAttemptPersistence:
             f"/api/v1/students/attempts/{attempt_id}/complete",
             headers={"X-CSRF-Token": csrf_token},
         )
-        assert second_response.status_code == 422
+        assert second_response.status_code == 200
+        assert second_response.json() == first_response.json()
 
     @pytest.mark.asyncio
-    async def test_concurrent_completion_only_one_succeeds(self, attempt_scenario, test_db_url):
+    async def test_repeated_completion_keeps_single_result(self, attempt_scenario, test_db_url):
         """Concurrent completion requests: only one succeeds, no duplicate streak/reward/progress.
 
         Uses a conditional UPDATE (WHERE status != "completed") to atomically transition
@@ -2177,7 +2178,7 @@ class TestActivityAttemptPersistence:
             f"/api/v1/students/attempts/{attempt_id}/complete",
             headers={"X-CSRF-Token": csrf_token},
         )
-        assert repeat_response.status_code == 422
+        assert repeat_response.status_code == 200
 
         # Verify final database state: no duplicate streak, no duplicate rewards
         from app.models import ActivityAttempt, StudentProfile, StudentRewardAward
@@ -2406,12 +2407,12 @@ class TestLessonProgressUpdates:
             headers={"X-CSRF-Token": csrf_token},
         )
 
-        # Try to complete again - should be rejected
+        # Try to complete again - replay the saved result
         repeat_response = await client.post(
             f"/api/v1/students/attempts/{attempt_id}/complete",
             headers={"X-CSRF-Token": csrf_token},
         )
-        assert repeat_response.status_code == 422  # Attempt already completed
+        assert repeat_response.status_code == 200  # Completed result replayed
 
         # Progress should not change
         from app.models import StudentLessonProgress
@@ -2456,6 +2457,11 @@ class TestLessonProgressUpdates:
         await client.post(
             f"/api/v1/students/attempts/{attempt_id}/responses",
             json={"question_id": ctx["q1_id"], "selected_option_ids": [ctx["q1_correct_id"]]},
+            headers={"X-CSRF-Token": csrf_token},
+        )
+        await client.post(
+            f"/api/v1/students/attempts/{attempt_id}/responses",
+            json={"question_id": ctx["q2_id"], "selected_option_ids": [ctx["q2_correct_id"]]},
             headers={"X-CSRF-Token": csrf_token},
         )
         await client.post(
@@ -2674,7 +2680,7 @@ class TestLessonProgressUpdates:
             headers={"X-CSRF-Token": csrf_token},
         )
         attempt_id_2 = start_response2.json()["attempt_id"]
-        assert attempt_id_2 != attempt_id_1
+        assert attempt_id_2 == attempt_id_1
 
         # Verify only ONE lesson progress record exists
         from app.models import StudentLessonProgress
@@ -2779,10 +2785,15 @@ class TestStreaksAndRewards:
             f"/api/v1/students/attempts/{attempt_id}/complete",
             headers={"X-CSRF-Token": csrf_token},
         )
-        assert complete_response.status_code == 200
-        result = complete_response.json()
-        assert result["passed"] is False
-        assert len(result["rewards_earned"]) == 0
+        assert complete_response.status_code == 422
+        from sqlalchemy import func
+        from app.models import StudentRewardAward
+        check_session, check_engine = create_async_session(test_db_url)
+        async with check_session:
+            count = await check_session.scalar(select(func.count(StudentRewardAward.id)).where(
+                StudentRewardAward.student_id == ctx["student_id"]))
+            assert count == 0
+        await check_engine.dispose()
 
     @pytest.mark.asyncio
     async def test_repeated_completion_no_duplicate_awards(self, attempt_scenario, test_db_url):
@@ -2823,12 +2834,12 @@ class TestStreaksAndRewards:
         )
         assert first_star_count == 1
 
-        # Try to complete again - should be rejected (idempotent)
+        # Try to complete again - replay the saved result (idempotent)
         repeat_response = await client.post(
             f"/api/v1/students/attempts/{attempt_id}/complete",
             headers={"X-CSRF-Token": csrf_token},
         )
-        assert repeat_response.status_code == 422
+        assert repeat_response.status_code == 200
 
     @pytest.mark.asyncio
     async def test_student_cannot_access_another_students_rewards(self, attempt_scenario, test_db_url):
@@ -3244,7 +3255,7 @@ class TestStreaksAndRewards:
         result1 = await self._complete_activity(ctx, activity_id)
         rewards_count_1 = len(result1["rewards_earned"])
 
-        # Try to complete again - should be rejected (idempotent)
+        # Try to complete again - replay the saved result (idempotent)
         start_response = await client.post(
             f"/api/v1/students/me/activities/{activity_id}/attempts",
             headers={"X-CSRF-Token": csrf_token},
@@ -4573,3 +4584,61 @@ class TestAdminActivityDifficultyTier:
             assert patch_response.status_code == 403
 
         app.dependency_overrides.clear()
+
+class TestPhase6Regression:
+    @pytest.mark.asyncio
+    async def test_wrong_answer_and_duplicate_score(self, attempt_scenario):
+        ctx = attempt_scenario
+        client = ctx['client']
+        headers = {'X-CSRF-Token': ctx['csrf_token']}
+        start = await client.post(f"/api/v1/students/me/activities/{ctx['activity_id']}/attempts", headers=headers)
+        attempt = start.json()['attempt_id']
+        url = f'/api/v1/students/attempts/{attempt}/responses'
+        wrong = await client.post(url, headers=headers, json={'question_id': ctx['q1_id'], 'selected_option_ids': [ctx['q1_wrong_id']]})
+        assert wrong.json()['is_correct'] is False
+        assert wrong.json()['saved_progress']['accumulated_score'] == 0
+        payload = {'question_id': ctx['q1_id'], 'selected_option_ids': [ctx['q1_correct_id']]}
+        first = await client.post(url, headers=headers, json=payload)
+        repeat = await client.post(url, headers=headers, json=payload)
+        assert repeat.json()['saved_progress'] == first.json()['saved_progress']
+        assert repeat.json()['saved_progress']['correct_count'] == 1
+        invalid = await client.post(url, headers=headers, json={'question_id': ctx['q1_id'], 'selected_option_ids': [ctx['q2_correct_id']]})
+        assert invalid.status_code == 422
+        incomplete = await client.post(f'/api/v1/students/attempts/{attempt}/complete', headers=headers)
+        assert incomplete.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_restarts_resume_and_completion_replays(self, attempt_scenario):
+        ctx = attempt_scenario
+        client = ctx['client']; headers = {'X-CSRF-Token': ctx['csrf_token']}
+        url = f"/api/v1/students/me/activities/{ctx['activity_id']}/attempts"
+        first = (await client.post(url, headers=headers)).json()
+        second = (await client.post(url, headers=headers)).json()
+        assert first['attempt_id'] == second['attempt_id']
+        attempt = first['attempt_id']
+        for q, answer in [('q1_id','q1_correct_id'), ('q2_id','q2_correct_id')]:
+            await client.post(f'/api/v1/students/attempts/{attempt}/responses', headers=headers,
+                json={'question_id':ctx[q], 'selected_option_ids':[ctx[answer]]})
+        complete_url = f'/api/v1/students/attempts/{attempt}/complete'
+        completed = await client.post(complete_url, headers=headers)
+        repeated = await client.post(complete_url, headers=headers)
+        assert completed.status_code == repeated.status_code == 200
+        assert completed.json() == repeated.json()
+        assert completed.json()['score'] == 100
+        assert completed.json()['correct_count'] == 2
+        retry = (await client.post(url, headers=headers)).json()
+        assert retry['attempt_id'] != attempt
+
+    @pytest.mark.asyncio
+    async def test_unpublished_activity_and_lesson_are_not_accessible(self, attempt_scenario):
+        ctx = attempt_scenario
+        session, engine = create_async_session(ctx['test_db_url'])
+        async with session:
+            lesson = await session.get(Lesson, ctx['lesson_id'])
+            lesson.status = 'draft'
+            await session.commit()
+        await engine.dispose()
+        result = await ctx['client'].post(
+            f"/api/v1/students/me/activities/{ctx['activity_id']}/attempts",
+            headers={'X-CSRF-Token': ctx['csrf_token']})
+        assert result.status_code == 404

@@ -1,3 +1,4 @@
+import { useOptionalAudio } from "@hooks/useOptionalAudio";
 import { ActivityTypeComponentProps } from "../ActivityRenderer";
 import {
   renderActivityHeader,
@@ -20,6 +21,9 @@ import {
 export function StoryListeningActivity(
   props: ActivityTypeComponentProps,
 ): React.ReactElement {
+  const { play: handlePlayAudio, message: audioMessage } = useOptionalAudio(
+    props.audioEnabled,
+  );
   const {
     activity,
     currentQuestion,
@@ -53,10 +57,11 @@ export function StoryListeningActivity(
 
   if (completed) {
     const percentage =
-      activity.questions.length > 0
+      props.finalScore ??
+      (activity.questions.length > 0
         ? Math.round((score / activity.questions.length) * 100)
-        : 0;
-    const earnedStar = percentage >= 80;
+        : 0);
+    const earnedStar = props.rewardsEnabled !== false;
     return renderCompletionScreen({
       activity,
       score,
@@ -84,13 +89,6 @@ export function StoryListeningActivity(
   const storyAudioUrl = question.prompt_audio_url;
   const isFirstQuestion = currentQuestion === 0;
 
-  const handlePlayAudio = (url: string | null) => {
-    if (url) {
-      const audio = new Audio(url);
-      audio.play().catch(() => console.warn("Audio playback failed"));
-    }
-  };
-
   return (
     <div className="space-y-6">
       {renderActivityHeader({
@@ -104,6 +102,27 @@ export function StoryListeningActivity(
       {renderProgress({ currentQuestion, totalQuestions, score })}
 
       <div className="card p-6">
+        {audioMessage && <p role="status">{audioMessage}</p>}
+        {typeof question.configuration?.storyText === "string" && (
+          <p className="text-xl leading-relaxed mb-6">
+            {question.configuration.storyText}
+          </p>
+        )}
+        {!storyAudioUrl && (
+          <p className="text-sm mb-4">
+            Use Listen for an available device voice, or enjoy the story with a
+            grown-up.
+          </p>
+        )}
+        {question.question_type === "exploration" && (
+          <button
+            className="btn btn-primary"
+            disabled={showFeedback || submitting}
+            onClick={props.onExplore}
+          >
+            We enjoyed the story!
+          </button>
+        )}
         {/* Story player - shown on first question */}
         {isFirstQuestion && storyAudioUrl && (
           <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl border border-purple-100">
@@ -123,26 +142,10 @@ export function StoryListeningActivity(
                   </h3>
                 </div>
               </div>
-              <button
-                onClick={() => handlePlayAudio(storyAudioUrl)}
-                className="btn btn-primary px-6 py-2"
-                aria-label="Play story"
-              >
-                <svg
-                  className="w-5 h-5 mr-2"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
-                  />
-                </svg>
-                Listen to Story
-              </button>
+              <p className="text-sm">
+                Use Listen above for the available audio or device narration. A
+                grown-up can also read the prompt.
+              </p>
             </div>
           </div>
         )}
@@ -168,7 +171,10 @@ export function StoryListeningActivity(
                   </div>
                   {option.text_audio_url && (
                     <button
-                      onClick={() => handlePlayAudio(option.text_audio_url)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handlePlayAudio(option.text_audio_url);
+                      }}
                       className="btn btn-ghost p-2"
                       aria-label={`Play answer option`}
                     >

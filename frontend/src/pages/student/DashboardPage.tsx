@@ -489,10 +489,8 @@ export default function DashboardPage() {
           <div className="w-14 h-14 rounded-xl bg-pastel-yellow flex items-center justify-center mx-auto mb-3">
             <Target className="w-7 h-7 text-primary-500" />
           </div>
-          <p className="text-2xl font-display font-bold text-gray-900">
-            {stats.current_streak || 0}
-          </p>
-          <p className="text-sm text-gray-500">Day Streak</p>
+          <p className="text-2xl font-display font-bold text-gray-900">🌱</p>
+          <p className="text-sm text-gray-500">Explore at your pace</p>
         </div>
       </div>
 

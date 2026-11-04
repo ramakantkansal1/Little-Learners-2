@@ -13,6 +13,7 @@ import { studentApi, type HistoryItem } from "@services/api";
 
 export default function HistoryPage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [rewardCount, setRewardCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<"calendar" | "list">("calendar");
@@ -25,6 +26,13 @@ export default function HistoryPage() {
       try {
         const response = await studentApi.getHistory();
         setHistory(response.data);
+        const rewards = await studentApi.getRewards();
+        setRewardCount(
+          rewards.data.reduce(
+            (n, r) => n + (r.award_count ?? Number(r.earned)),
+            0,
+          ),
+        );
       } catch (err) {
         console.error("Failed to load history:", err);
         setError("Failed to load history. Please try again.");
@@ -37,10 +45,11 @@ export default function HistoryPage() {
 
   // Calculate stats from history
   const stats = {
-    totalDays: 30,
-    activeDays: history.filter(
-      (h) => h.time_spent_seconds && h.time_spent_seconds > 0,
-    ).length,
+    activeDays: new Set(
+      history
+        .filter((h) => h.completed_at)
+        .map((h) => h.completed_at!.slice(0, 10)),
+    ).size,
     totalLessons: history.reduce((sum, h) => sum + (h.lesson_title ? 1 : 0), 0),
     totalTime: (() => {
       const totalSeconds = history.reduce(
@@ -51,71 +60,12 @@ export default function HistoryPage() {
       const minutes = Math.floor((totalSeconds % 3600) / 60);
       return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
     })(),
-    totalRewards: history.reduce((sum, h) => sum + (h.lesson_title ? 1 : 0), 0), // simplified
-    longestStreak: 0,
-    currentStreak: 0,
+    totalRewards: rewardCount,
   };
-
-  // Simple streak calculation
-  const calculateStreak = (history: HistoryItem[]) => {
-    let currentStreak = 0;
-    let longestStreak = 0;
-    let tempStreak = 0;
-
-    const sortedHistory = [...history].sort(
-      (a, b) =>
-        new Date(a.completed_at || 0).getTime() -
-        new Date(b.completed_at || 0).getTime(),
-    );
-
-    let lastDate: Date | null = null;
-
-    for (const item of sortedHistory) {
-      if (!item.completed_at) continue;
-      const itemDate = new Date(item.completed_at);
-      itemDate.setHours(0, 0, 0, 0);
-
-      if (!lastDate) {
-        tempStreak = 1;
-      } else {
-        const diffDays = Math.floor(
-          (itemDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24),
-        );
-        if (diffDays === 1) {
-          tempStreak += 1;
-        } else if (diffDays > 1) {
-          tempStreak = 1;
-        }
-      }
-      longestStreak = Math.max(longestStreak, tempStreak);
-      lastDate = itemDate;
-    }
-
-    // Check current streak from today backwards
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    currentStreak = 0;
-    const checkDate = new Date(today);
-
-    const historyMap = new Map(
-      history.map((h) => [h.completed_at?.split("T")[0], h]),
-    );
-
-    while (historyMap.has(checkDate.toISOString().split("T")[0])) {
-      currentStreak += 1;
-      checkDate.setDate(checkDate.getDate() - 1);
-    }
-
-    return { currentStreak, longestStreak };
-  };
-
-  const { currentStreak, longestStreak } = calculateStreak(history);
 
   const updatedStats = {
     ...stats,
-    currentStreak,
-    longestStreak,
-    totalRewards: history.filter((h) => h.lesson_title).length,
+    totalRewards: rewardCount,
     totalLessons: history.filter((h) => h.lesson_title).length,
   };
 
@@ -182,7 +132,7 @@ export default function HistoryPage() {
             Learning Journey
           </h1>
           <p className="text-gray-600 mt-1">
-            Track your daily learning adventures
+            Your latest 50 completed activities
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -204,7 +154,7 @@ export default function HistoryPage() {
             <div>
               <p className="text-sm text-gray-500">Active Days</p>
               <p className="text-2xl font-display font-bold text-gray-900">
-                {updatedStats.activeDays}/{updatedStats.totalDays}
+                {updatedStats.activeDays}
               </p>
             </div>
             <div className="w-12 h-12 rounded-xl bg-pastel-blue flex items-center justify-center">
@@ -215,7 +165,7 @@ export default function HistoryPage() {
         <div className="card p-5">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">Lessons Completed</p>
+              <p className="text-sm text-gray-500">Activities Completed</p>
               <p className="text-2xl font-display font-bold text-gray-900">
                 {updatedStats.totalLessons}
               </p>
@@ -253,23 +203,9 @@ export default function HistoryPage() {
         </div>
       </div>
 
-      {/* Streak */}
-      <div className="card p-6 bg-gradient-to-br from-pastel-pink to-pastel-peach">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-white/80">Current Streak</p>
-            <p className="text-4xl font-display font-bold text-white">
-              {updatedStats.currentStreak} days 🔥
-            </p>
-            <p className="text-white/70 mt-1">
-              Longest streak: {updatedStats.longestStreak} days
-            </p>
-          </div>
-          <div className="w-20 h-20 rounded-2xl bg-white/30 flex items-center justify-center">
-            <Trophy className="w-10 h-10 text-white" />
-          </div>
-        </div>
-      </div>
+      <p className="card p-6">
+        Every discovery counts. Take breaks and explore at your own pace.
+      </p>
 
       {/* Calendar View */}
       {view === "calendar" && (
@@ -451,7 +387,7 @@ export default function HistoryPage() {
             <Star className="w-3 h-3 text-yellow-500" /> Reward Earned
           </span>
           <span className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-orange-100" /> Streak Day
+            <span className="w-3 h-3 rounded-full bg-orange-100" /> Learning Day
           </span>
           <span className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-gray-100" /> No Activity

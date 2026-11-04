@@ -233,6 +233,9 @@ async def _validate_question(
     if question.points is not None and question.points < 1:
         result.add_warning(f"{prefix}.points", "Points should be at least 1")
 
+    if question.question_type == "exploration":
+        return
+
     # Validate answer options
     options = [opt for opt in question.answer_options if opt is not None]
     if not options:

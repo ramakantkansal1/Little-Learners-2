@@ -71,6 +71,7 @@ class StudentProfile(Base, IDMixin, TimestampMixin, SoftDeleteMixin):
     preferred_language: Mapped[str] = mapped_column(String(10), default="en", nullable=False)  # en, hi
     audio_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     reduced_motion: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    rewards_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1", nullable=False)
     high_contrast: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_activity_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -1,3 +1,4 @@
+import { useOptionalAudio } from "@hooks/useOptionalAudio";
 import { ActivityTypeComponentProps } from "../ActivityRenderer";
 import {
   renderActivityHeader,
@@ -21,6 +22,9 @@ import {
 export function AudioIdentificationActivity(
   props: ActivityTypeComponentProps,
 ): React.ReactElement {
+  const { play: handlePlayAudio, message: audioMessage } = useOptionalAudio(
+    props.audioEnabled,
+  );
   const {
     activity,
     currentQuestion,
@@ -54,10 +58,11 @@ export function AudioIdentificationActivity(
 
   if (completed) {
     const percentage =
-      activity.questions.length > 0
+      props.finalScore ??
+      (activity.questions.length > 0
         ? Math.round((score / activity.questions.length) * 100)
-        : 0;
-    const earnedStar = percentage >= 80;
+        : 0);
+    const earnedStar = props.rewardsEnabled !== false;
     return renderCompletionScreen({
       activity,
       score,
@@ -80,17 +85,9 @@ export function AudioIdentificationActivity(
     activity.questions[0]?.question_type.replace("_", " ") ||
     "Audio Identification";
 
-  const promptAudioUrl = question.prompt_audio_url;
   const soundHint = question.configuration?.soundHint as string | undefined;
   const soundCategory = question.configuration?.soundCategory as
     string | undefined;
-
-  const handlePlayAudio = (url: string | null) => {
-    if (url) {
-      const audio = new Audio(url);
-      audio.play().catch(() => console.warn("Audio playback failed"));
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -105,6 +102,7 @@ export function AudioIdentificationActivity(
       {renderProgress({ currentQuestion, totalQuestions, score })}
 
       <div className="card p-6">
+        {audioMessage && <p role="status">{audioMessage}</p>}
         <div className="text-center mb-6">
           <div className="text-2xl font-semibold text-gray-700 mb-4">
             Listen and identify the sound:
@@ -112,26 +110,10 @@ export function AudioIdentificationActivity(
 
           <div className="flex flex-col items-center gap-4">
             {/* Big play button */}
-            <button
-              onClick={() => handlePlayAudio(promptAudioUrl)}
-              disabled={!promptAudioUrl}
-              className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label="Play sound"
-            >
-              <svg
-                className="w-12 h-12 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
-                />
-              </svg>
-            </button>
+            <p className="text-sm">
+              Use Listen above for the available audio or device narration. A
+              grown-up can also read the prompt.
+            </p>
 
             {soundHint && (
               <p className="text-sm text-gray-500 bg-gray-50 px-4 py-2 rounded-lg">
@@ -169,7 +151,10 @@ export function AudioIdentificationActivity(
                     />
                   ) : option.text_audio_url ? (
                     <button
-                      onClick={() => handlePlayAudio(option.text_audio_url)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handlePlayAudio(option.text_audio_url);
+                      }}
                       className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors"
                       aria-label={`Play sound for ${option.text}`}
                     >

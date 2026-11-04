@@ -1,0 +1,215 @@
+{
+  "username": "codex_test_child_4907",
+  "childId": 4907,
+  "stage": {
+    "id": 1,
+    "code": "playgroup",
+    "name": "Playgroup / Pre-Nursery",
+    "description": "Play-based exploration for ages 2-3 years. Focus on sensory experiences, familiar objects, sounds, colors, movement, and social routines.",
+    "min_age_months": 24,
+    "max_age_months": 36,
+    "display_order": 1,
+    "icon": "baby",
+    "color": "#FFB3BA",
+    "is_active": true
+  },
+  "results": [
+    {
+      "name": "Student UI login with server-generated username",
+      "status": "PASS"
+    },
+    {
+      "name": "/student/dashboard",
+      "status": "PASS"
+    },
+    {
+      "name": "/student/history",
+      "status": "PASS"
+    },
+    {
+      "name": "/student/rewards",
+      "status": "PASS"
+    },
+    {
+      "name": "/student/learn/1",
+      "status": "PASS"
+    },
+    {
+      "name": "Open first lesson activity",
+      "status": "PASS"
+    },
+    {
+      "name": "Activity reload preserves attempt",
+      "status": "PASS"
+    },
+    {
+      "name": "Student role guard /parent/dashboard",
+      "status": "FAIL",
+      "error": "expect(received).not.toContain(expected) // indexOf\n\nExpected substring: not \"/parent/dashboard\"\nReceived string:        \"http://localhost:5173/parent/dashboard\""
+    },
+    {
+      "name": "Student role guard /admin/dashboard",
+      "status": "FAIL",
+      "error": "expect(received).not.toContain(expected) // indexOf\n\nExpected substring: not \"/admin/dashboard\"\nReceived string:        \"http://localhost:5173/admin/dashboard\""
+    },
+    {
+      "name": "Student backend parent API denied",
+      "status": "FAIL",
+      "error": "expect(received).toContain(expected) // indexOf\n\nExpected value: 404\nReceived array: [401, 403]"
+    },
+    {
+      "name": "Student backend admin API denied",
+      "status": "PASS"
+    }
+  ],
+  "network": [
+    {
+      "url": "http://localhost:5173/api/v1/auth/csrf-token",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/auth/parent/login",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/parents/me",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/parents/me",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/parents/me/children/4907/progress",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/parents/me/children/4907/progress",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/auth/csrf-token",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/auth/student/login",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/me/dashboard",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/me",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/auth/me",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/auth/me",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/auth/me",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/auth/me",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/me",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/me/dashboard",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/me/lessons",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/me/learn/1",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/auth/csrf-token",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/me",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/me/dashboard",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/me/lessons",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/curriculum/subjects?stage_id=1&active_only=true",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/me/learn/1",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/me/activities/1/attempts",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/me/attempts/144",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/me/attempts/144",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/auth/me",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/me/dashboard",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/me",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/me/lessons",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/me/attempts/144",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/students/me",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/auth/me",
+      "status": 200
+    },
+    {
+      "url": "http://localhost:5173/api/v1/parents/me",
+      "status": 403
+    },
+    {
+      "url": "http://localhost:5173/api/v1/parents/me",
+      "status": 403
+    },
+    {
+      "url": "http://localhost:5173/api/v1/auth/me",
+      "status": 200
+    }
+  ]
+}

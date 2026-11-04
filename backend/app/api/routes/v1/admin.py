@@ -2,20 +2,20 @@
 Admin API endpoints.
 """
 from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, case, and_
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, lazyload
 
 from app.core.database import get_db
 from app.core.exceptions import NotFoundException, ValidationException
 from app.models import (
     User, Role, UserRole, ParentProfile, StudentProfile,
     LearningStage, LearningDomain, Subject, Topic, LearningObjective,
-    Lesson, Activity, Question, AnswerOption, StudentReward,
+    Lesson, Activity, Question, AnswerOption, StudentReward, LessonTranslation, ActivityTranslation,
     ParentStudentRelationship, ParentNotification, AuditLog,
     ActivityAttempt, StudentLessonProgress,
     ContentStatusEnum, ActivityTypeEnum, EnrollmentStatusEnum
@@ -61,7 +61,7 @@ class UserListResponse(BaseModel):
 
 class UserUpdateRequest(BaseModel):
     is_active: Optional[bool] = None
-    role: Optional[str] = None
+    role: Optional[str] = Field(None, pattern="^(admin|parent|student)$")
 
 
 class AdminStageResponse(BaseModel):
@@ -119,6 +119,8 @@ class AdminLessonListResponse(BaseModel):
 
 
 class AdminSubjectResponse(BaseModel):
+    topics_count: int = 0
+    lessons_count: int = 0
     id: int
     code: str
     name: str
@@ -170,7 +172,7 @@ class LessonTranslationRequest(BaseModel):
 class AdminLessonCreateRequest(BaseModel):
     topic_id: int
     code: str = Field(..., min_length=1, max_length=50)
-    status: str = Field(default="draft")
+    status: Literal["draft", "review", "published", "archived"] = "draft"
     version: int = 1
     estimated_duration_minutes: Optional[int] = None
     thumbnail_url: Optional[str] = None
@@ -182,7 +184,7 @@ class AdminLessonCreateRequest(BaseModel):
 
 class AdminLessonUpdateRequest(BaseModel):
     topic_id: Optional[int] = None
-    status: Optional[str] = None
+    status: Optional[Literal["draft", "review", "published", "archived"]] = None
     version: Optional[int] = None
     estimated_duration_minutes: Optional[int] = None
     thumbnail_url: Optional[str] = None
@@ -203,7 +205,7 @@ class AdminActivityCreateRequest(BaseModel):
     lesson_id: int
     type: str
     code: str = Field(..., min_length=1, max_length=50)
-    status: str = Field(default="draft")
+    status: Literal["draft", "review", "published", "archived"] = "draft"
     version: int = 1
     display_order: int = 0
     estimated_duration_minutes: Optional[int] = None
@@ -216,7 +218,7 @@ class AdminActivityCreateRequest(BaseModel):
 class AdminActivityUpdateRequest(BaseModel):
     lesson_id: Optional[int] = None
     type: Optional[str] = None
-    status: Optional[str] = None
+    status: Optional[Literal["draft", "review", "published", "archived"]] = None
     version: Optional[int] = None
     display_order: Optional[int] = None
     estimated_duration_minutes: Optional[int] = None
@@ -227,6 +229,7 @@ class AdminActivityUpdateRequest(BaseModel):
 
 
 class AdminActivityListResponse(BaseModel):
+    lesson_id: int
     id: int
     code: str
     type: str
@@ -284,14 +287,14 @@ async def get_admin_dashboard(
         .join(UserRole, User.id == UserRole.user_id)
         .join(Role, UserRole.role_id == Role.id)
         .where(Role.name == "parent")
-        .where(User.is_deleted == False)
+        .where(User.deleted_at.is_(None))
     )
     total_parents = parents_result.scalar() or 0
 
     # Total children
     children_result = await db.execute(
         select(func.count(StudentProfile.id))
-        .where(StudentProfile.is_deleted == False)
+        .where(StudentProfile.deleted_at.is_(None))
     )
     total_children = children_result.scalar() or 0
 
@@ -299,7 +302,7 @@ async def get_admin_dashboard(
     active_result = await db.execute(
         select(func.count(User.id))
         .where(User.is_active == True)
-        .where(User.is_deleted == False)
+        .where(User.deleted_at.is_(None))
     )
     active_accounts = active_result.scalar() or 0
 
@@ -342,7 +345,7 @@ async def get_admin_dashboard(
     recent_result = await db.execute(
         select(func.count(User.id))
         .where(User.created_at >= week_ago)
-        .where(User.is_deleted == False)
+        .where(User.deleted_at.is_(None))
     )
     recent_registrations = recent_result.scalar() or 0
 
@@ -372,10 +375,10 @@ async def list_users(
     await verify_admin(current_user)
 
     query = (
-        select(User, Role)
+        select(User, Role).options(lazyload("*"))
         .join(UserRole, User.id == UserRole.user_id)
         .join(Role, UserRole.role_id == Role.id)
-        .where(User.is_deleted == False)
+        .where(User.deleted_at.is_(None))
         .order_by(User.created_at.desc())
     )
 
@@ -396,12 +399,12 @@ async def list_users(
         children_count = 0
         if role.name == "parent":
             parent_result = await db.execute(
-                select(ParentProfile).where(ParentProfile.user_id == user.id)
+                select(ParentProfile).options(lazyload("*")).where(ParentProfile.user_id == user.id)
             )
             parent = parent_result.scalar_one_or_none()
             if parent:
                 parent_name = parent.full_name
-                children_count = len([r for r in parent.student_relationships if not r.student.is_deleted])
+                children_count = await db.scalar(select(func.count(ParentStudentRelationship.id)).join(StudentProfile, StudentProfile.id == ParentStudentRelationship.student_id).where(ParentStudentRelationship.parent_id == parent.id, StudentProfile.deleted_at.is_(None))) or 0
 
         users.append(UserListResponse(
             id=user.id,
@@ -428,34 +431,38 @@ async def update_user(
     """Update user status or role."""
     await verify_admin(current_user)
 
+    await db.commit()
+    admin_role = await db.scalar(select(Role).where(Role.name == 'admin').with_for_update())
+    still_admin = await db.scalar(select(UserRole.id).where(UserRole.user_id == current_user.id, UserRole.role_id == admin_role.id))
+    if not still_admin:
+        raise HTTPException(status_code=403, detail='Administrator access has been revoked')
     user_result = await db.execute(
-        select(User).where(User.id == user_id).where(User.is_deleted == False)
+        select(User).options(lazyload("*")).where(User.id == user_id).where(User.deleted_at.is_(None))
     )
     user = user_result.scalar_one_or_none()
     if not user:
         raise NotFoundException("User not found")
 
+    if user_id == current_user.id and (request.is_active is False or request.role not in (None, 'admin')):
+        raise ValidationException("You cannot suspend or demote your own administrator account")
+    if request.role == 'student':
+        linked = await db.scalar(select(StudentProfile.id).where(StudentProfile.user_id == user_id))
+        if not linked:
+            raise ValidationException("Student access must be created through a parent-managed child profile")
+    if request.role == 'parent':
+        linked = await db.scalar(select(ParentProfile.id).where(ParentProfile.user_id == user_id))
+        if not linked:
+            raise ValidationException("This account has no parent profile")
     if request.is_active is not None:
         user.is_active = request.is_active
-        if not request.is_active:
-            user.deleted_at = datetime.now(timezone.utc)
-
     if request.role is not None:
-        # Remove existing roles
-        await db.execute(
-            UserRole.__table__.delete().where(UserRole.user_id == user_id)
-        )
-
-        # Add new role
-        role_result = await db.execute(
-            select(Role).where(Role.name == request.role)
-        )
-        role = role_result.scalar_one_or_none()
+        role = await db.scalar(select(Role).where(Role.name == request.role))
         if not role:
             raise ValidationException("Invalid role")
-
-        user_role = UserRole(user_id=user_id, role_id=role.id)
-        db.add(user_role)
+        await db.execute(UserRole.__table__.delete().where(UserRole.user_id == user_id))
+        db.add(UserRole(user_id=user_id, role_id=role.id, assigned_by=current_user.id))
+    db.add(AuditLog(user_id=current_user.id, action='update', resource_type='user', resource_id=user_id,
+                    new_values=request.model_dump(exclude_none=True), success=True))
 
     await db.commit()
 
@@ -471,7 +478,7 @@ async def admin_list_stages(
     await verify_admin(current_user)
 
     result = await db.execute(
-        select(LearningStage)
+        select(LearningStage).options(lazyload("*"))
         .order_by(LearningStage.display_order)
     )
     return result.scalars().all()
@@ -488,7 +495,7 @@ async def admin_create_stage(
 
     # Check code uniqueness
     existing = await db.execute(
-        select(LearningStage).where(LearningStage.code == request.code)
+        select(LearningStage).options(lazyload("*")).where(LearningStage.code == request.code)
     )
     if existing.scalar_one_or_none():
         raise ValidationException("Stage code already exists")
@@ -505,7 +512,7 @@ async def admin_create_stage(
         is_active=request.is_active,
     )
     db.add(stage)
-    await db.commit()
+    await db.flush()
     await db.refresh(stage)
 
     # Audit log
@@ -535,7 +542,7 @@ async def admin_update_stage(
     await verify_admin(current_user)
 
     result = await db.execute(
-        select(LearningStage).where(LearningStage.id == stage_id)
+        select(LearningStage).options(lazyload("*")).where(LearningStage.id == stage_id)
     )
     stage = result.scalar_one_or_none()
     if not stage:
@@ -570,7 +577,7 @@ async def admin_update_stage(
     if request.is_active is not None:
         stage.is_active = request.is_active
 
-    await db.commit()
+    await db.flush()
     await db.refresh(stage)
 
     # Audit log
@@ -610,7 +617,7 @@ async def admin_delete_stage(
     await verify_admin(current_user)
 
     result = await db.execute(
-        select(LearningStage).where(LearningStage.id == stage_id)
+        select(LearningStage).options(lazyload("*")).where(LearningStage.id == stage_id)
     )
     stage = result.scalar_one_or_none()
     if not stage:
@@ -618,7 +625,7 @@ async def admin_delete_stage(
 
     stage.is_active = False
     stage.deleted_at = datetime.now(timezone.utc)
-    await db.commit()
+    await db.flush()
 
     audit = AuditLog(
         user_id=current_user.id,
@@ -634,6 +641,7 @@ async def admin_delete_stage(
 
 @router.get("/lessons", response_model=List[AdminLessonListResponse])
 async def admin_list_lessons(
+    topic_id: Optional[int] = Query(None),
     stage_id: Optional[int] = Query(None),
     subject_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
@@ -645,10 +653,9 @@ async def admin_list_lessons(
     """List lessons for admin management."""
     await verify_admin(current_user)
 
-    from app.models import LessonTranslation, Topic, Subject
 
     query = (
-        select(Lesson, Topic, Subject, LessonTranslation)
+        select(Lesson, Topic, Subject, LessonTranslation).options(lazyload("*")).options(selectinload(Subject.stage).lazyload("*"))
         .join(Topic, Lesson.topic_id == Topic.id)
         .join(Subject, Topic.subject_id == Subject.id)
         .outerjoin(
@@ -659,7 +666,7 @@ async def admin_list_lessons(
             )
         )
         .where(Lesson.deleted_at.is_(None))
-        .order_by(Subject.display_order, Topic.display_order, Lesson.display_order)
+        .order_by(Lesson.id.desc())
     )
 
     if status:
@@ -707,7 +714,7 @@ async def admin_publish_lesson(
         # Log failed publish attempt
         audit = AuditLog(
             user_id=current_user.id,
-            action="content_publish_failed",
+            action="content_publish",
             resource_type="lesson",
             resource_id=str(lesson_id),
             resource_name="",
@@ -720,16 +727,20 @@ async def admin_publish_lesson(
         raise ValidationException("Lesson validation failed", details=validation_result.errors)
 
     result = await db.execute(
-        select(Lesson).where(Lesson.id == lesson_id)
+        select(Lesson).options(lazyload("*")).where(Lesson.id == lesson_id)
     )
     lesson = result.scalar_one_or_none()
     if not lesson:
         raise NotFoundException("Lesson not found")
 
+    lesson.is_active = True
+    activities = (await db.execute(select(Activity).options(lazyload("*")).where(Activity.lesson_id == lesson_id, Activity.is_active.is_(True), Activity.deleted_at.is_(None)))).scalars()
+    for activity in activities:
+        activity.status = ContentStatusEnum.PUBLISHED
     lesson.status = ContentStatusEnum.PUBLISHED
     lesson.published_at = datetime.now(timezone.utc)
     lesson.published_by = current_user.id
-    await db.commit()
+    await db.flush()
 
     audit = AuditLog(
         user_id=current_user.id,
@@ -768,7 +779,7 @@ async def admin_unpublish_lesson(
     await verify_admin(current_user)
 
     result = await db.execute(
-        select(Lesson).where(Lesson.id == lesson_id)
+        select(Lesson).options(lazyload("*")).where(Lesson.id == lesson_id)
     )
     lesson = result.scalar_one_or_none()
     if not lesson:
@@ -777,7 +788,7 @@ async def admin_unpublish_lesson(
     lesson.status = ContentStatusEnum.DRAFT
     lesson.published_at = None
     lesson.published_by = None
-    await db.commit()
+    await db.flush()
 
     audit = AuditLog(
         user_id=current_user.id,
@@ -803,7 +814,7 @@ async def admin_archive_lesson(
     await verify_admin(current_user)
 
     result = await db.execute(
-        select(Lesson).where(Lesson.id == lesson_id)
+        select(Lesson).options(lazyload("*")).where(Lesson.id == lesson_id)
     )
     lesson = result.scalar_one_or_none()
     if not lesson:
@@ -815,12 +826,12 @@ async def admin_archive_lesson(
 
     lesson.status = ContentStatusEnum.ARCHIVED
     lesson.is_active = False
-    lesson.deleted_at = datetime.now(timezone.utc)
-    await db.commit()
+    await db.flush()
 
     audit = AuditLog(
         user_id=current_user.id,
-        action="content_archive",
+        action="update",
+        new_values={"status": "archived"},
         resource_type="lesson",
         resource_id=str(lesson.id),
         resource_name=lesson.code,
@@ -861,10 +872,9 @@ async def admin_list_subjects(
     """List subjects for admin management."""
     await verify_admin(current_user)
 
-    from app.models import LearningDomain, LearningStage
 
     query = (
-        select(Subject, LearningDomain, LearningStage)
+        select(Subject, LearningDomain, LearningStage).options(lazyload("*"))
         .join(LearningDomain, Subject.domain_id == LearningDomain.id)
         .join(LearningStage, Subject.stage_id == LearningStage.id)
         .where(Subject.deleted_at.is_(None))
@@ -879,9 +889,14 @@ async def admin_list_subjects(
     query = query.limit(limit).offset(offset)
     result = await db.execute(query)
 
+    rows = result.all()
+    ids = [subject.id for subject, _, _ in rows]
+    topic_counts = dict((await db.execute(select(Topic.subject_id, func.count(Topic.id)).where(Topic.subject_id.in_(ids), Topic.deleted_at.is_(None)).group_by(Topic.subject_id))).all())
+    lesson_counts = dict((await db.execute(select(Topic.subject_id, func.count(Lesson.id)).join(Lesson, Lesson.topic_id == Topic.id).where(Topic.subject_id.in_(ids), Lesson.deleted_at.is_(None)).group_by(Topic.subject_id))).all())
     subjects = []
-    for subject, domain, stage in result.all():
+    for subject, domain, stage in rows:
         subjects.append(AdminSubjectResponse(
+            topics_count=topic_counts.get(subject.id,0), lessons_count=lesson_counts.get(subject.id,0),
             id=subject.id,
             code=subject.code,
             name=subject.name,
@@ -908,9 +923,12 @@ async def admin_create_subject(
     """Create a new subject."""
     await verify_admin(current_user)
 
+    domain = await db.scalar(select(LearningDomain).where(LearningDomain.id == request.domain_id, LearningDomain.stage_id == request.stage_id))
+    if not domain:
+        raise ValidationException("Choose a domain belonging to the selected stage")
     # Check code uniqueness within stage and domain
     existing = await db.execute(
-        select(Subject).where(
+        select(Subject).options(lazyload("*")).where(
             Subject.stage_id == request.stage_id,
             Subject.domain_id == request.domain_id,
             Subject.code == request.code
@@ -931,7 +949,7 @@ async def admin_create_subject(
         is_active=request.is_active,
     )
     db.add(subject)
-    await db.commit()
+    await db.flush()
     await db.refresh(subject)
 
     # Audit log
@@ -961,7 +979,7 @@ async def admin_update_subject(
     await verify_admin(current_user)
 
     result = await db.execute(
-        select(Subject).where(Subject.id == subject_id)
+        select(Subject).options(lazyload("*")).where(Subject.id == subject_id)
     )
     subject = result.scalar_one_or_none()
     if not subject:
@@ -996,7 +1014,7 @@ async def admin_update_subject(
     if request.is_active is not None:
         subject.is_active = request.is_active
 
-    await db.commit()
+    await db.flush()
     await db.refresh(subject)
 
     # Audit log
@@ -1036,7 +1054,7 @@ async def admin_delete_subject(
     await verify_admin(current_user)
 
     result = await db.execute(
-        select(Subject).where(Subject.id == subject_id)
+        select(Subject).options(lazyload("*")).where(Subject.id == subject_id)
     )
     subject = result.scalar_one_or_none()
     if not subject:
@@ -1044,7 +1062,7 @@ async def admin_delete_subject(
 
     subject.is_active = False
     subject.deleted_at = datetime.now(timezone.utc)
-    await db.commit()
+    await db.flush()
 
     audit = AuditLog(
         user_id=current_user.id,
@@ -1071,10 +1089,11 @@ async def admin_create_lesson(
     """Create a new lesson."""
     await verify_admin(current_user)
 
+    if request.status == 'published':
+        raise ValidationException("Create a draft, add tasks, then use Publish after validation")
     # Check topic exists
-    from app.models import Topic
     topic_result = await db.execute(
-        select(Topic).where(Topic.id == request.topic_id)
+        select(Topic).options(lazyload("*")).options(selectinload(Topic.subject).selectinload(Subject.stage).lazyload("*")).where(Topic.id == request.topic_id)
     )
     topic = topic_result.scalar_one_or_none()
     if not topic:
@@ -1082,7 +1101,7 @@ async def admin_create_lesson(
 
     # Check code uniqueness within topic
     existing = await db.execute(
-        select(Lesson).where(
+        select(Lesson).options(lazyload("*")).where(
             Lesson.topic_id == request.topic_id,
             Lesson.code == request.code
         )
@@ -1106,7 +1125,6 @@ async def admin_create_lesson(
 
     # Handle translations
     if request.translations:
-        from app.models import LessonTranslation
         for trans in request.translations:
             lesson_translation = LessonTranslation(
                 lesson_id=lesson.id,
@@ -1118,7 +1136,7 @@ async def admin_create_lesson(
             )
             db.add(lesson_translation)
 
-    await db.commit()
+    await db.flush()
     await db.refresh(lesson)
 
     # Audit log
@@ -1135,9 +1153,8 @@ async def admin_create_lesson(
     await db.commit()
 
     # Return with enriched data
-    from app.models import LessonTranslation, Subject
     trans_result = await db.execute(
-        select(LessonTranslation).where(
+        select(LessonTranslation).options(lazyload("*")).where(
             LessonTranslation.lesson_id == lesson.id,
             LessonTranslation.language == 'en'
         )
@@ -1168,7 +1185,7 @@ async def admin_update_lesson(
     await verify_admin(current_user)
 
     result = await db.execute(
-        select(Lesson).where(Lesson.id == lesson_id)
+        select(Lesson).options(lazyload("*")).where(Lesson.id == lesson_id)
     )
     lesson = result.scalar_one_or_none()
     if not lesson:
@@ -1187,14 +1204,15 @@ async def admin_update_lesson(
 
     if request.topic_id is not None:
         # Verify topic exists
-        from app.models import Topic
         topic_result = await db.execute(
-            select(Topic).where(Topic.id == request.topic_id)
+            select(Topic).options(lazyload("*")).options(selectinload(Topic.subject).selectinload(Subject.stage).lazyload("*")).where(Topic.id == request.topic_id)
         )
         topic = topic_result.scalar_one_or_none()
         if not topic:
             raise ValidationException("Topic not found")
         lesson.topic_id = request.topic_id
+    if request.status == 'published' and lesson.status != ContentStatusEnum.PUBLISHED:
+        raise ValidationException("Use the validated Publish action")
     if request.status is not None:
         lesson.status = request.status
     if request.version is not None:
@@ -1212,7 +1230,6 @@ async def admin_update_lesson(
 
     # Handle translations
     if request.translations is not None:
-        from app.models import LessonTranslation
         # Delete existing translations and create new ones
         await db.execute(
             LessonTranslation.__table__.delete().where(LessonTranslation.lesson_id == lesson_id)
@@ -1228,7 +1245,7 @@ async def admin_update_lesson(
             )
             db.add(lesson_translation)
 
-    await db.commit()
+    await db.flush()
     await db.refresh(lesson)
 
     # Audit log
@@ -1255,16 +1272,15 @@ async def admin_update_lesson(
     await db.commit()
 
     # Return with enriched data
-    from app.models import LessonTranslation, Topic, Subject
     trans_result = await db.execute(
-        select(LessonTranslation).where(
+        select(LessonTranslation).options(lazyload("*")).where(
             LessonTranslation.lesson_id == lesson.id,
             LessonTranslation.language == 'en'
         )
     )
     translation = trans_result.scalar_one_or_none()
     topic_result = await db.execute(
-        select(Topic).where(Topic.id == lesson.topic_id)
+        select(Topic).options(lazyload("*")).options(selectinload(Topic.subject).selectinload(Subject.stage).lazyload("*")).where(Topic.id == lesson.topic_id)
     )
     topic = topic_result.scalar_one_or_none()
 
@@ -1296,7 +1312,7 @@ async def admin_create_activity(
 
     # Check lesson exists
     lesson_result = await db.execute(
-        select(Lesson).where(Lesson.id == request.lesson_id)
+        select(Lesson).options(lazyload("*")).where(Lesson.id == request.lesson_id)
     )
     lesson = lesson_result.scalar_one_or_none()
     if not lesson:
@@ -1310,7 +1326,7 @@ async def admin_create_activity(
 
     # Check code uniqueness within lesson
     existing = await db.execute(
-        select(Activity).where(
+        select(Activity).options(lazyload("*")).where(
             Activity.lesson_id == request.lesson_id,
             Activity.code == request.code
         )
@@ -1335,7 +1351,6 @@ async def admin_create_activity(
 
     # Handle translations
     if request.translations:
-        from app.models import ActivityTranslation
         for trans in request.translations:
             activity_translation = ActivityTranslation(
                 activity_id=activity.id,
@@ -1346,7 +1361,7 @@ async def admin_create_activity(
             )
             db.add(activity_translation)
 
-    await db.commit()
+    await db.flush()
     await db.refresh(activity)
 
     # Audit log
@@ -1363,9 +1378,8 @@ async def admin_create_activity(
     await db.commit()
 
     # Return with enriched data
-    from app.models import ActivityTranslation
     trans_result = await db.execute(
-        select(ActivityTranslation).where(
+        select(ActivityTranslation).options(lazyload("*")).where(
             ActivityTranslation.activity_id == activity.id,
             ActivityTranslation.language == 'en'
         )
@@ -1374,6 +1388,7 @@ async def admin_create_activity(
 
     return AdminActivityListResponse(
         id=activity.id,
+        lesson_id=activity.lesson_id,
         code=activity.code,
         type=activity.type.value,
         title=translation.title if translation else activity.code,
@@ -1394,7 +1409,7 @@ async def admin_update_activity(
     await verify_admin(current_user)
 
     result = await db.execute(
-        select(Activity).where(Activity.id == activity_id)
+        select(Activity).options(lazyload("*")).where(Activity.id == activity_id)
     )
     activity = result.scalar_one_or_none()
     if not activity:
@@ -1415,7 +1430,7 @@ async def admin_update_activity(
 
     if request.lesson_id is not None:
         lesson_result = await db.execute(
-            select(Lesson).where(Lesson.id == request.lesson_id)
+            select(Lesson).options(lazyload("*")).where(Lesson.id == request.lesson_id)
         )
         lesson = lesson_result.scalar_one_or_none()
         if not lesson:
@@ -1443,7 +1458,6 @@ async def admin_update_activity(
 
     # Handle translations
     if request.translations is not None:
-        from app.models import ActivityTranslation
         # Delete existing translations and create new ones
         await db.execute(
             ActivityTranslation.__table__.delete().where(ActivityTranslation.activity_id == activity_id)
@@ -1458,7 +1472,7 @@ async def admin_update_activity(
             )
             db.add(activity_translation)
 
-    await db.commit()
+    await db.flush()
     await db.refresh(activity)
 
     # Audit log
@@ -1487,21 +1501,21 @@ async def admin_update_activity(
     await db.commit()
 
     # Return with enriched data
-    from app.models import ActivityTranslation, Lesson
     trans_result = await db.execute(
-        select(ActivityTranslation).where(
+        select(ActivityTranslation).options(lazyload("*")).where(
             ActivityTranslation.activity_id == activity.id,
             ActivityTranslation.language == 'en'
         )
     )
     translation = trans_result.scalar_one_or_none()
     lesson_result = await db.execute(
-        select(Lesson).where(Lesson.id == activity.lesson_id)
+        select(Lesson).options(lazyload("*")).where(Lesson.id == activity.lesson_id)
     )
     lesson = lesson_result.scalar_one_or_none()
 
     return AdminActivityListResponse(
         id=activity.id,
+        lesson_id=activity.lesson_id,
         code=activity.code,
         type=activity.type.value,
         title=translation.title if translation else activity.code,
@@ -1521,7 +1535,7 @@ async def admin_delete_activity(
     await verify_admin(current_user)
 
     result = await db.execute(
-        select(Activity).where(Activity.id == activity_id)
+        select(Activity).options(lazyload("*")).where(Activity.id == activity_id)
     )
     activity = result.scalar_one_or_none()
     if not activity:
@@ -1529,7 +1543,7 @@ async def admin_delete_activity(
 
     activity.is_active = False
     activity.deleted_at = datetime.now(timezone.utc)
-    await db.commit()
+    await db.flush()
 
     audit = AuditLog(
         user_id=current_user.id,
@@ -1556,10 +1570,9 @@ async def admin_list_activities(
     """List activities for admin management."""
     await verify_admin(current_user)
 
-    from app.models import ActivityTranslation, Lesson
 
     query = (
-        select(Activity, Lesson, ActivityTranslation)
+        select(Activity, Lesson, ActivityTranslation).options(lazyload("*"))
         .join(Lesson, Activity.lesson_id == Lesson.id)
         .outerjoin(
             ActivityTranslation,
@@ -1569,7 +1582,7 @@ async def admin_list_activities(
             )
         )
         .where(Activity.deleted_at.is_(None))
-        .order_by(Lesson.display_order, Activity.display_order)
+        .order_by(Activity.id.desc())
     )
 
     if status:
@@ -1586,6 +1599,7 @@ async def admin_list_activities(
     for activity, lesson, translation in result.all():
         activities.append(AdminActivityListResponse(
             id=activity.id,
+            lesson_id=activity.lesson_id,
             code=activity.code,
             type=activity.type.value,
             title=translation.title if translation else activity.code,
@@ -1622,7 +1636,7 @@ async def admin_get_activity_difficulty_tier(
     await verify_admin(current_user)
 
     result = await db.execute(
-        select(Activity).where(Activity.id == activity_id)
+        select(Activity).options(lazyload("*")).where(Activity.id == activity_id)
     )
     activity = result.scalar_one_or_none()
     if not activity:
@@ -1653,7 +1667,7 @@ async def admin_update_activity_difficulty_tier(
     await verify_admin(current_user)
 
     result = await db.execute(
-        select(Activity).where(Activity.id == activity_id)
+        select(Activity).options(lazyload("*")).where(Activity.id == activity_id)
     )
     activity = result.scalar_one_or_none()
     if not activity:
@@ -1682,7 +1696,7 @@ async def admin_update_activity_difficulty_tier(
     activity.configuration = new_configuration
     flag_modified(activity, "configuration")
 
-    await db.commit()
+    await db.flush()
     await db.refresh(activity)
 
     # Audit log
@@ -1732,12 +1746,12 @@ async def admin_get_analytics(
             func.count(User.id).label('count')
         )
         .where(User.created_at >= from_date)
-        .where(User.is_deleted == False)
+        .where(User.deleted_at.is_(None))
         .group_by(func.date(User.created_at))
         .order_by(func.date(User.created_at))
     )
     registrations_by_day = [
-        {"date": row.date.isoformat(), "count": row.count}
+        {"date": (row.date.isoformat() if hasattr(row.date, "isoformat") else str(row.date)), "count": row.count}
         for row in reg_result.all()
     ]
 
@@ -1753,7 +1767,7 @@ async def admin_get_analytics(
         .order_by(func.date(StudentLessonProgress.completed_at))
     )
     lessons_completed_by_day = [
-        {"date": row.date.isoformat(), "count": row.count}
+        {"date": (row.date.isoformat() if hasattr(row.date, "isoformat") else str(row.date)), "count": row.count}
         for row in lesson_result.all()
     ]
 
@@ -1768,7 +1782,7 @@ async def admin_get_analytics(
         .order_by(func.date(ActivityAttempt.started_at))
     )
     active_users_by_day = [
-        {"date": row.date.isoformat(), "count": row.count}
+        {"date": (row.date.isoformat() if hasattr(row.date, "isoformat") else str(row.date)), "count": row.count}
         for row in active_result.all()
     ]
 
@@ -1803,14 +1817,13 @@ async def admin_get_analytics(
         select(
             LearningStage.code,
             LearningStage.name,
-            func.count(StudentLessonProgress.id).filter(StudentLessonProgress.status == "completed").label('completed'),
+            func.sum(case((StudentLessonProgress.status == "completed", 1), else_=0)).label('completed'),
             func.count(StudentLessonProgress.id).label('total')
         )
         .join(Subject, Subject.stage_id == LearningStage.id)
         .join(Topic, Topic.subject_id == Subject.id)
         .join(Lesson, Lesson.topic_id == Topic.id)
         .join(StudentLessonProgress, StudentLessonProgress.lesson_id == Lesson.id)
-        .where(StudentLessonProgress.deleted_at.is_(None))
         .group_by(LearningStage.id, LearningStage.code, LearningStage.name)
     )
     completion_rates_by_stage = [
@@ -1850,7 +1863,7 @@ async def admin_get_audit_logs(
     await verify_admin(current_user)
 
     query = (
-        select(AuditLog, User)
+        select(AuditLog, User).options(lazyload("*"))
         .outerjoin(User, AuditLog.user_id == User.id)
         .order_by(AuditLog.created_at.desc())
     )

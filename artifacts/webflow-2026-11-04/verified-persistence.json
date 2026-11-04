@@ -1,0 +1,43 @@
+{
+  "history": [
+    {
+      "id": 145,
+      "lesson_id": 1,
+      "lesson_title": "lesson_1",
+      "activity_id": 1,
+      "activity_title": "activity_1",
+      "status": "completed",
+      "score": 100,
+      "completed_at": "2026-11-04T07:23:26",
+      "time_spent_seconds": 0
+    }
+  ],
+  "parentAPIStatus": 403,
+  "adminAPIStatus": 403,
+  "parentProgress": {
+    "child_id": 4907,
+    "child_name": "Codex Test Child",
+    "stage_code": "playgroup",
+    "stage_name": "Playgroup / Pre-Nursery",
+    "total_lessons": 21,
+    "completed_lessons": 0,
+    "in_progress_lessons": 1,
+    "total_activities": 2,
+    "completed_activities": 1,
+    "total_time_spent_minutes": 0,
+    "average_score": 100,
+    "rewards_earned": 1,
+    "recent_activity": [
+      {
+        "lesson": "Unknown",
+        "activity": "Unknown",
+        "completed_at": "2026-11-04T07:23:26",
+        "score": 100,
+        "time_spent": 0
+      }
+    ]
+  },
+  "createdChildId": 4907,
+  "email": "codex_webflow_1793776811457@example.com",
+  "username": "codex_test_child_4907"
+}

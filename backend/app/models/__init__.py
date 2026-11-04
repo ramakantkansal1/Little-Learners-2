@@ -105,3 +105,4 @@ __all__ = [
     "NotificationTypeEnum",
     "AuditActionEnum",
 ]
+from app.models.settings import PlatformSetting

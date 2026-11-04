@@ -1,0 +1,118 @@
+Admin Panel
+Dashboard
+User Management
+Curriculum
+Media Library
+Analytics
+Audit Logs
+Settings
+
+student_codex_test_child_4907_4880@hll.local
+
+Administrator
+
+Dashboard
+student_codex_test_child_4907_4880@hll.local
+Admin Dashboard
+
+Platform overview and key metrics
+
+Registered Parents
+
+1,234
+
++12%
+vs last month
+
+Child Profiles
+
+2,156
+
++8%
+vs last month
+
+Published Lessons
+
+48
+
++3
+vs last month
+
+Activities Completed
+
+12,450
+
++234
+vs last month
+Content Status
+View All
+Published
+48
+In Review
+12
+Draft
+8
+Archived
+3
+Recent Activity
+View All
+
+New parent registered
+
+By priya@example.com • 2 min ago
+
+Lesson published
+
+Counting 1-20 (Mathematics)
+
+By admin • 15 min ago
+
+Media uploaded
+
+5 images for Nursery
+
+By content_team • 1 hour ago
+
+Content review completed
+
+Hindi Alphabet lesson approved
+
+By reviewer • 3 hours ago
+
+New child profile created
+
+By rahul@example.com • 5 hours ago
+
+Top Lessons by Completion
+View Analytics
+RANK	LESSON	SUBJECT	COMPLETIONS	RATING
+#1	Counting 1-10	Mathematics	1,250	
+4.9
+
+#2	Letter Sounds A-E	English	1,180	
+4.8
+
+#3	Shapes & Colors	Mathematics	980	
+4.7
+
+#4	My Family	EVS	890	
+4.8
+
+#5	Rhyming Words	English	750	
+4.6
+Quick Actions
+Create Lesson
+
+Add new learning content
+
+Upload Media
+
+Add images & audio
+
+Add User
+
+Create admin/parent accounts
+
+Settings
+
+Platform configuration

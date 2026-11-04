@@ -30,11 +30,11 @@ async def get_current_user(
         raise AuthorizationException("Invalid or expired token")
 
     # Fetch user from database with roles eagerly loaded
-    from sqlalchemy.orm import selectinload
+    from sqlalchemy.orm import selectinload, lazyload
     result = await db.execute(
         select(User)
         .where(User.id == int(token_data.sub))
-        .options(selectinload(User.user_roles).selectinload(UserRole.role))
+        .options(lazyload("*"), selectinload(User.user_roles).selectinload(UserRole.role).lazyload("*"))
     )
     user = result.scalar_one_or_none()
 

@@ -370,6 +370,7 @@ export interface ChildCreateRequest {
 }
 
 export interface ChildUpdateRequest {
+  rewards_enabled?: boolean;
   display_name?: string;
   date_of_birth?: string;
   gender?: string;
@@ -563,6 +564,7 @@ export interface ActivityDetail {
       image_url: string | null;
       display_order: number;
       correct_option_id?: number;
+      configuration?: Record<string, unknown>;
     }>;
   }>;
 }
@@ -589,6 +591,10 @@ export interface OptionContent {
 }
 
 export interface AttemptStartResponse {
+  status?: string;
+  score?: number | null;
+  rewards_enabled?: boolean;
+  time_spent_seconds?: number;
   attempt_id: number;
   activity: ActivityDetail;
   questions: Array<{
@@ -605,12 +611,19 @@ export interface AttemptStartResponse {
       text_audio_url: string | null;
       image_url: string | null;
       display_order: number;
+      configuration?: Record<string, unknown>;
     }>;
   }>;
   saved_progress?: {
     current_question_index?: number;
     selected_answer_id?: number;
     accumulated_score?: number;
+    correct_count?: number;
+    responses?: Array<{
+      question_id: number;
+      selected_option_ids: number[];
+      is_correct: boolean;
+    }>;
   } | null;
   lesson_progress?: {
     completion_percentage: number;
@@ -627,6 +640,12 @@ export interface AnswerSubmitResponse {
     current_question_index?: number;
     selected_answer_id?: number;
     accumulated_score?: number;
+    correct_count?: number;
+    responses?: Array<{
+      question_id: number;
+      selected_option_ids: number[];
+      is_correct: boolean;
+    }>;
   } | null;
   lesson_progress?: {
     completion_percentage: number;
@@ -646,6 +665,9 @@ export interface NextActivityRecommendation {
 }
 
 export interface AttemptCompleteResponse {
+  correct_count?: number;
+  rewards_enabled?: boolean;
+  lesson_progress?: { status: string; completion_percentage: number };
   score: number;
   passed: boolean;
   rewards_earned: Array<{
@@ -662,6 +684,7 @@ export interface AttemptCompleteResponse {
 }
 
 export interface Reward {
+  award_count?: number;
   id: number;
   code: string;
   name: string;
@@ -708,18 +731,28 @@ export const studentApi = {
     attemptId: number,
     questionId: number,
     selectedOptionIds: number[],
+    timeSpentSeconds = 0,
+    outcome?: "explored",
   ) =>
     api.post<AnswerSubmitResponse>(
       `/students/attempts/${attemptId}/responses`,
       {
         question_id: questionId,
         selected_option_ids: selectedOptionIds,
+        time_spent_seconds: timeSpentSeconds,
+        outcome,
       },
     ),
 
-  completeAttempt: (attemptId: number) =>
+  saveAttemptTime: (attemptId: number, seconds: number) =>
+    api.patch(`/students/attempts/${attemptId}/time`, {
+      time_spent_seconds: seconds,
+    }),
+
+  completeAttempt: (attemptId: number, seconds = 0) =>
     api.post<AttemptCompleteResponse>(
       `/students/attempts/${attemptId}/complete`,
+      { time_spent_seconds: seconds },
     ),
 
   getRewards: () => api.get<Reward[]>("/students/me/rewards"),
@@ -867,6 +900,8 @@ export interface AdminActivity {
 }
 
 export interface AdminSubject {
+  topics_count?: number;
+  lessons_count?: number;
   id: number;
   code: string;
   name: string;

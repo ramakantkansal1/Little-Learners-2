@@ -1,7 +1,7 @@
 """
 API v1 routes package initialization.
 """
-from app.api.routes.v1 import health, auth, parents, students, curriculum, progress, admin, media
+from app.api.routes.v1 import health, auth, parents, students, curriculum, progress, admin, media, admin_catalog
 
 # Combine all routers
 from fastapi import APIRouter
@@ -14,6 +14,7 @@ api_router.include_router(parents.router, prefix="/parents", tags=["parents"])
 api_router.include_router(students.router, prefix="/students", tags=["students"])
 api_router.include_router(curriculum.router, prefix="/curriculum", tags=["curriculum"])
 api_router.include_router(progress.router, prefix="/progress", tags=["progress"])
+api_router.include_router(admin_catalog.router, prefix="/admin", tags=["admin"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(media.router, prefix="/media", tags=["media"])
 

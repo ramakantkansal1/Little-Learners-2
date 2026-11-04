@@ -1,0 +1,37 @@
+Happy Little Learners
+Dashboard
+My Children
+Progress Reports
+Notifications
+Settings
+
+codex_webflow_1793776811457@example.com
+
+Parent Account
+
+Settings
+3
+Settings
+
+Manage your account, preferences, and privacy
+
+Profile
+Notifications
+Privacy
+Accessibility
+👩
+Priya Sharma
+
+priya@example.com
+
+Full Name
+Email
+
+Email cannot be changed
+
+Phone Number
+Change Password
+Current Password
+New Password
+Confirm New Password
+Save Changes

@@ -97,3 +97,7 @@ node_modules/
 
 # Mac
 .DS_Store
+# Local Phase 6 browser evidence; traces can contain test-session cookies
+frontend/playwright-phase6-report/
+frontend/test-results/
+frontend/playwright-phase7-report/

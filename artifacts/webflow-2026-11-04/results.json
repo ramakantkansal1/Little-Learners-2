@@ -1,0 +1,88 @@
+{
+  "date": "2026-11-04",
+  "testEmail": "codex_webflow_1793776811457@example.com",
+  "studentUsername": "codex_1793776811457",
+  "childId": 4907,
+  "results": [
+    {
+      "name": "Verify isolated E2E backend",
+      "status": "PASS"
+    },
+    {
+      "name": "Desktop landing page",
+      "status": "PASS"
+    },
+    {
+      "name": "Parent registration through browser",
+      "status": "PASS"
+    },
+    {
+      "name": "Create child using authenticated API",
+      "status": "PASS"
+    },
+    {
+      "name": "Parent route /parent/dashboard",
+      "status": "PASS"
+    },
+    {
+      "name": "Parent route /parent/children",
+      "status": "PASS"
+    },
+    {
+      "name": "Parent route /parent/children/4907/progress",
+      "status": "PASS"
+    },
+    {
+      "name": "Parent route /parent/settings",
+      "status": "PASS"
+    },
+    {
+      "name": "Parent route /parent/notifications",
+      "status": "PASS"
+    },
+    {
+      "name": "Parent session survives refresh",
+      "status": "PASS"
+    },
+    {
+      "name": "Student login through browser",
+      "status": "FAIL",
+      "error": "expect(page).toHaveURL(expected) failed\n\nExpected pattern: /student\\/dashboard/\nReceived string:  \"http://localhost:5173/auth/student/login\"\nTimeout: 20000ms\n\nCall log:\n  - Expect \"toHaveURL\" with timeout 20000ms\n    44 × locator resolved to <html lang=\"en\">…</html>\n       - unexpected value \"http://localhost:5173/auth/student/login\"\n"
+    },
+    {
+      "name": "Student route /student/history",
+      "status": "FAIL",
+      "error": "expect(received).toContain(expected) // indexOf\n\nExpected substring: \"/student/history\"\nReceived string:    \"http://localhost:5173/auth/student/login\""
+    },
+    {
+      "name": "Student route /student/rewards",
+      "status": "FAIL",
+      "error": "expect(received).toContain(expected) // indexOf\n\nExpected substring: \"/student/rewards\"\nReceived string:    \"http://localhost:5173/auth/student/login\""
+    },
+    {
+      "name": "Student route /student/learn/1",
+      "status": "FAIL",
+      "error": "expect(received).toContain(expected) // indexOf\n\nExpected substring: \"/student/learn/1\"\nReceived string:    \"http://localhost:5173/auth/student/login\""
+    },
+    {
+      "name": "Student cannot open parent dashboard",
+      "status": "FAIL",
+      "error": "expect(page).not.toHaveURL(expected) failed\n\nExpected pattern: not /parent\\/dashboard/\nReceived string: \"http://localhost:5173/parent/dashboard\"\nTimeout: 10000ms\n\nCall log:\n  - Expect \"not toHaveURL\" with timeout 10000ms\n    24 × locator resolved to <html lang=\"en\">…</html>\n       - unexpected value \"http://localhost:5173/parent/dashboard\"\n"
+    },
+    {
+      "name": "Student cannot open admin dashboard",
+      "status": "FAIL",
+      "error": "expect(page).not.toHaveURL(expected) failed\n\nExpected pattern: not /admin\\/dashboard/\nReceived string: \"http://localhost:5173/admin/dashboard\"\nTimeout: 10000ms\n\nCall log:\n  - Expect \"not toHaveURL\" with timeout 10000ms\n    23 × locator resolved to <html lang=\"en\">…</html>\n       - unexpected value \"http://localhost:5173/admin/dashboard\"\n"
+    },
+    {
+      "name": "Mobile landing fits viewport",
+      "status": "PASS"
+    },
+    {
+      "name": "Unauthenticated protected route redirects",
+      "status": "FAIL",
+      "error": "expect(page).toHaveURL(expected) failed\n\nExpected pattern: /auth\\/parent\\/login/\nReceived string:  \"http://localhost:5173/parent/dashboard\"\nTimeout: 5000ms\n\nCall log:\n  - Expect \"toHaveURL\" with timeout 5000ms\n    14 × locator resolved to <html lang=\"en\">…</html>\n       - unexpected value \"http://localhost:5173/parent/dashboard\"\n"
+    }
+  ],
+  "errors": []
+}

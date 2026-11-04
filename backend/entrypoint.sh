@@ -5,7 +5,7 @@ set -e
 echo "Waiting for MySQL to be ready..."
 for i in {1..60}; do
   echo "Attempt $i: Testing MySQL connection..."
-  if mysqladmin ping -h mysql -u root -p"$MYSQL_ROOT_PASSWORD" --skip-ssl --silent; then
+  if mysqladmin ping -h "${DB_HOST:-mysql}" -P "${DB_PORT:-3306}" -u "$DB_USER" -p"$DB_PASSWORD" --skip-ssl --silent; then
     echo "MySQL is ready!"
     break
   fi
